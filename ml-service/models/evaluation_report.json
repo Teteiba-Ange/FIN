@@ -1,0 +1,92 @@
+{
+  "training_date": "2026-06-25T16:39:01.391253",
+  "best_model": "Random Forest",
+  "all_results": [
+    {
+      "model_name": "Logistic Regression",
+      "auc_roc": 0.8973,
+      "accuracy": 0.805,
+      "precision": 0.6341,
+      "sensitivity_recall": 0.8525,
+      "specificity": 0.7842,
+      "f1_score": 0.7273,
+      "brier_score": 0.1314,
+      "cv_auc": 0.897
+    },
+    {
+      "model_name": "Random Forest",
+      "auc_roc": 0.9994,
+      "accuracy": 0.985,
+      "precision": 0.9677,
+      "sensitivity_recall": 0.9836,
+      "specificity": 0.9856,
+      "f1_score": 0.9756,
+      "brier_score": 0.0168,
+      "cv_auc": 0.9986
+    },
+    {
+      "model_name": "XGBoost",
+      "auc_roc": 0.9974,
+      "accuracy": 0.985,
+      "precision": 0.9677,
+      "sensitivity_recall": 0.9836,
+      "specificity": 0.9856,
+      "f1_score": 0.9756,
+      "brier_score": 0.0147,
+      "cv_auc": 0.997
+    },
+    {
+      "model_name": "Voting Ensemble",
+      "auc_roc": 0.9991,
+      "accuracy": 0.985,
+      "precision": 0.9677,
+      "sensitivity_recall": 0.9836,
+      "specificity": 0.9856,
+      "f1_score": 0.9756,
+      "brier_score": 0.0149,
+      "cv_auc": NaN
+    }
+  ],
+  "best_result": {
+    "model_name": "Random Forest",
+    "auc_roc": 0.9994,
+    "accuracy": 0.985,
+    "precision": 0.9677,
+    "sensitivity_recall": 0.9836,
+    "specificity": 0.9856,
+    "f1_score": 0.9756,
+    "brier_score": 0.0168,
+    "cv_auc": 0.9986
+  },
+  "features_used": [
+    "Age (yrs)",
+    "BMI",
+    "Cycle(R/I)",
+    "Cycle length(days)",
+    "Weight gain(Y/N)",
+    "hair growth(Y/N)",
+    "Skin darkening (Y/N)",
+    "Hair loss(Y/N)",
+    "Pimples(Y/N)",
+    "Fast food (Y/N)",
+    "Reg.Exercise(Y/N)",
+    "Waist:Hip Ratio",
+    "Pregnant(Y/N)",
+    "No. of abortions",
+    "Weight (Kg)",
+    "Marraige Status (Yrs)"
+  ],
+  "dataset_info": {
+    "train_samples": 2228,
+    "test_samples": 200,
+    "n_features": 16
+  },
+  "nfr14_compliance": {
+    "auc_threshold": 0.85,
+    "auc_achieved": 0.9994,
+    "auc_met": true,
+    "sensitivity_threshold": 0.8,
+    "sensitivity_achieved": 0.9836,
+    "sensitivity_met": true
+  }
+}
