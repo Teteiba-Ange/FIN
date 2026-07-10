@@ -25,7 +25,7 @@ const ORANGE      = "#f59e0b";
 const GREEN       = "#10b981";
 const RED         = "#ef4444";
 const CARD_BG     = "#ffffff";
-const PAGE_BG     = "#fdf8f7"; // Premium soft cozy background accent
+const PAGE_BG     = "#fdf8f7";
 
 // ── Animated Smooth Progress Bar ──────────────────────────────────────────────
 const AnimBar = ({
@@ -114,11 +114,10 @@ const CompactBarChart = ({
   barColor?: string;
 }) => {
   const max = Math.max(...data.map((d) => d.value), 1);
-  const CHART_HEIGHT = 80; // Compact, balanced height parameters
+  const CHART_HEIGHT = 80;
 
   return (
     <View style={barChartStyles.container}>
-      {/* Background Subtle Axis Indicators */}
       <View style={barChartStyles.gridContainer}>
         <View style={barChartStyles.gridLine} />
         <View style={barChartStyles.gridLine} />
@@ -156,7 +155,7 @@ const barChartStyles = StyleSheet.create({
   barsRow: { flexDirection: "row", alignItems: "flex-end", gap: 12 },
   barWrapper: { flex: 1, alignItems: "center" },
   barValueText: { fontSize: 10, color: "#475569", fontWeight: "700", marginBottom: 4 },
-  barStick: { width: 14, borderRadius: 10, opacity: 0.9 }, // Clean refined slim width parameters
+  barStick: { width: 14, borderRadius: 10, opacity: 0.9 },
   barLabelText: { fontSize: 10, color: "#94a3b8", fontWeight: "600", marginTop: 6 },
 });
 
@@ -165,10 +164,9 @@ const ContinuousTimeSeriesGraph = ({ values, labels, lineColor = BLUSH_PINK }: {
   const max = Math.max(...values, 100);
   const min = Math.min(...values, 0);
   const graphHeight = 75;
-  
+
   return (
     <View style={timeSeriesStyles.container}>
-      {/* Background Y-Axis Guide Markers */}
       <View style={timeSeriesStyles.yAxisContainer}>
         <Text style={timeSeriesStyles.axisMarkerText}>{max}%</Text>
         <Text style={timeSeriesStyles.axisMarkerText}>{(max+min)/2}%</Text>
@@ -176,25 +174,20 @@ const ContinuousTimeSeriesGraph = ({ values, labels, lineColor = BLUSH_PINK }: {
       </View>
 
       <View style={timeSeriesStyles.graphRightBlock}>
-        {/* Plotting Coordinates Area */}
         <View style={[timeSeriesStyles.plotZone, { height: graphHeight }]}>
-          {/* Horizontal dotted alignment guides */}
           <View style={timeSeriesStyles.dottedHorizontalGuide} />
           <View style={timeSeriesStyles.dottedHorizontalGuide} />
-          
+
           <View style={timeSeriesStyles.nodesConnectionRow}>
             {values.map((val, idx) => {
-              // Calculate responsive mathematical distribution mapping offsets safely
               const positionPercentage = ((val - min) / (max - min || 1)) * 100;
-              
+
               return (
                 <View key={idx} style={timeSeriesStyles.nodeColumn}>
-                  {/* Vertical coordinate link lines */}
                   <View style={[timeSeriesStyles.nodePlotPoint, { bottom: `${positionPercentage}%`, backgroundColor: lineColor }]}>
                     <View style={timeSeriesStyles.innerPulseCore} />
                   </View>
-                  
-                  {/* Trend connector connector background strip elements */}
+
                   {idx < values.length - 1 && (
                     <View style={[timeSeriesStyles.trendConnectorStrip, { bottom: `${positionPercentage}%`, backgroundColor: lineColor + "25" }]} />
                   )}
@@ -204,7 +197,6 @@ const ContinuousTimeSeriesGraph = ({ values, labels, lineColor = BLUSH_PINK }: {
           </View>
         </View>
 
-        {/* X-Axis Timeline Labels */}
         <View style={timeSeriesStyles.xAxisRow}>
           {labels.map((lbl, idx) => (
             <Text key={idx} style={timeSeriesStyles.xAxisLabelText}>{lbl}</Text>
@@ -260,7 +252,7 @@ const StatCard = ({ icon, label, value, unit, delta, color = TEAL }: { icon: str
   </View>
 );
 
-// ─── MAIN RE-ENGINEERED DASHBOARD SCREEN ─────────────────────────────────────
+// ─── MAIN DASHBOARD SCREEN ─────────────────────────────────────────────────────
 export default function DashboardScreen() {
   const router = useRouter();
   const { user } = useAuth();
@@ -286,9 +278,20 @@ export default function DashboardScreen() {
     { icon: "🔴", label: "Androgenic Acne",       value: 70, color: RED },
   ];
 
+  // Quick access features array
+  const features = [
+    { name: 'Symptom Log', screen: 'symptom-log', icon: '📝' },
+    { name: 'Cycle Tracker', screen: 'cycle-tracker', icon: '🔄' },
+    { name: 'Symptom Trends', screen: 'symptom-trends', icon: '📊' },
+    { name: 'Mental Wellbeing', screen: 'mental-wellbeing', icon: '🧠' },
+    { name: 'Wellness Library', screen: 'wellness-library', icon: '📚' },
+    { name: 'Community Forum', screen: 'community-feed', icon: '💬' },
+    { name: 'Notifications', screen: 'notification-settings', icon: '🔔' },
+    { name: 'Admin', screen: 'admin/moderation', icon: '⚙️' },
+  ];
+
   return (
     <SafeAreaView style={styles.safeArea}>
-      
       {/* Dynamic Header Space */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
@@ -304,7 +307,6 @@ export default function DashboardScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
-        
         {/* Core Risk Profile Overview */}
         <View style={styles.card}>
           <RiskGauge score={riskScore} />
@@ -332,9 +334,7 @@ export default function DashboardScreen() {
               <Text style={[styles.badgeText, { color: BLUSH_PINK }]}>7 Weeks</Text>
             </View>
           </View>
-          
           <ContinuousTimeSeriesGraph values={androgenHormoneIndexData} labels={seriesTimelineLabels} lineColor={BLUSH_PINK} />
-          
           <View style={styles.trendNoticeBlock}>
             <Text style={styles.trendNoticeText}>
               ⚠️ High-end variation curve detected across trailing intervals. We advise bringing these tracking insights to your next endocrinology panel session.
@@ -397,6 +397,21 @@ export default function DashboardScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* ── NEW: QUICK ACCESS FEATURES ── */}
+        <Text style={styles.sectionTitle}>EXPLORE TOOLS</Text>
+        <View style={styles.featureGrid}>
+          {features.map((item) => (
+            <TouchableOpacity
+              key={item.screen}
+              style={styles.featureCard}
+              onPress={() => router.push(item.screen)}
+            >
+              <Text style={styles.featureIcon}>{item.icon}</Text>
+              <Text style={styles.featureName}>{item.name}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
         <View style={{ height: 40 }} />
       </ScrollView>
     </SafeAreaView>
@@ -435,7 +450,7 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: "#fce7f3", // Soft feminine outline boundaries
+    borderColor: "#fce7f3",
     shadowColor: "#000",
     shadowOpacity: 0.03,
     shadowRadius: 6,
@@ -447,7 +462,7 @@ const styles = StyleSheet.create({
   badge: { borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 },
   badgeText: { fontSize: 10, fontWeight: "800" },
 
-  // Individual Metric Cards Style Definitions
+  // Metric Cards
   statCard: {
     backgroundColor: CARD_BG,
     borderRadius: 16,
@@ -469,7 +484,7 @@ const styles = StyleSheet.create({
   trendNoticeBlock: { backgroundColor: PINK_LIGHT, borderRadius: 10, padding: 10, marginTop: 14 },
   trendNoticeText: { fontSize: 11, color: BLUSH_PINK, fontWeight: "600", lineHeight: 16 },
 
-  // Recommendation Panels Setup
+  // Recommendation Panels
   recCard: {
     backgroundColor: CARD_BG,
     borderRadius: 16,
@@ -486,7 +501,40 @@ const styles = StyleSheet.create({
   recTitle: { fontSize: 13, fontWeight: "800", color: "#1e293b" },
   recSub: { fontSize: 12, color: "#64748b", marginTop: 3, lineHeight: 16 },
 
-  // Interactive Bottom Banner Section Setup
+  // Quick Access Feature Grid (NEW)
+  featureGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  featureCard: {
+    width: '23%',
+    aspectRatio: 1,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 10,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#f1f5f9',
+  },
+  featureIcon: {
+    fontSize: 28,
+    marginBottom: 4,
+  },
+  featureName: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#475569',
+    textAlign: 'center',
+  },
+
+  // CTA Banner
   ctaBanner: { backgroundColor: TEAL_DARK, borderRadius: 20, padding: 18, marginTop: 12 },
   ctaTitle: { fontSize: 15, fontWeight: "800", color: "#fff", marginBottom: 6 },
   ctaSub: { fontSize: 12, color: "rgba(255,255,255,0.8)", lineHeight: 18, marginBottom: 14 },

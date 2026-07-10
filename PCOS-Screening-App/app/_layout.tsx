@@ -1,5 +1,6 @@
 import React from 'react';
 import { Stack } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider } from '../context/authContext';
 import { AssessmentProvider } from '../context/assessmentContext';
@@ -7,6 +8,8 @@ import { AssessmentProvider } from '../context/assessmentContext';
 export default function Layout() {
   return (
     <SafeAreaProvider>
+      <StatusBar style="dark" />
+
       <AuthProvider>
         <AssessmentProvider>
           <Stack
