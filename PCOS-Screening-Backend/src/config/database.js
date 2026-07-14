@@ -82,6 +82,7 @@ const initializeDatabase = async () => {
           age INTEGER,
           weight REAL,
           height REAL,
+          profilePicture TEXT,
           createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
@@ -188,6 +189,7 @@ const initializeDatabase = async () => {
         age INTEGER,
         weight REAL,
         height REAL,
+        profilePicture TEXT,
         createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
         updatedAt TEXT DEFAULT CURRENT_TIMESTAMP
       )
