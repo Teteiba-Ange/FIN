@@ -26,7 +26,7 @@
 
 ## 📌 About the Project
 
-PMOS (Polycystic Ovarian Syndrome Management System) is a final year design science research project developed at the **University of Ghana, School of Engineering Sciences**.
+PMOS (Polycystic Ovarian Syndrome Management System) is a final year design science research project developed at the **University of Ghana, School of Computer Science**.
 
 PCOS affects approximately 1 in 10 women of reproductive age globally, yet many go undiagnosed or unsupported due to limited access to personalised health tools. PMOS bridges this gap by providing a user-friendly mobile platform where women can:
 
