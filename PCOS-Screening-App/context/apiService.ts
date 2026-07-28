@@ -25,6 +25,9 @@ const getApiBase = () => {
 const API_BASE = getApiBase();
 
 class PCOSAPIService {
+  saveNotificationSettings(settings: { symptomReminder: boolean; cycleReminder: boolean; communityActivity: boolean; wellnessTips: boolean; }) {
+    throw new Error("Method not implemented.");
+  }
   private token: string | null = null;
   private refreshToken: string | null = null;
   private refreshing: Promise<boolean> | null = null;
