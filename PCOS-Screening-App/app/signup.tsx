@@ -71,7 +71,7 @@ const Signup = ({ navigation }: SignupProps) => {
       >
       {/* Target Welcome Image */}
       <Image
-        source={require("../assets/lady.png")}
+        source={require("../assets/Exercise.png")}
         style={styles.image}
         resizeMode="cover"
       />

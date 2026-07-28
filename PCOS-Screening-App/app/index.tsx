@@ -29,7 +29,7 @@ export default function Index() {
     <View style={styles.container}>
       <TouchableOpacity onPress={() => router.push("/signup")}> 
         <Image
-          source={require("../assets/logo1.png")}
+          source={require("../assets/logo.png")}
           style={styles.logo}
         />
       </TouchableOpacity>
