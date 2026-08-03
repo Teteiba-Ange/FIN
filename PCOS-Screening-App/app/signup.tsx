@@ -12,9 +12,10 @@ import {
 import React, { useState } from "react";
 import { useRouter } from "expo-router";
 import { useAuth } from "../context/authContext";
+import { Feather as Icon } from "@expo/vector-icons";
 
 type SignupProps = {
-  navigation?: any; // Pass navigation prop if handling external navigator configurations
+  navigation?: any;
 };
 
 const Signup = ({ navigation }: SignupProps) => {
@@ -24,6 +25,8 @@ const Signup = ({ navigation }: SignupProps) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const handleCreateAccount = async () => {
     if (!name.trim() || !email.trim() || !password.trim() || !confirmPassword.trim()) {
@@ -69,116 +72,121 @@ const Signup = ({ navigation }: SignupProps) => {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-      {/* Target Welcome Image */}
-      <Image
-        source={require("../assets/Exercise.png")}
-        style={styles.image}
-        resizeMode="cover"
-      />
-
-      {/* Brand Title Match */}
-      <Text style={styles.title}>Join PMOS Wellness</Text>
-
-      {/* Subtitle Message */}
-      <Text style={styles.subtitle}>
-        Begin your journey to hormonal balance with personalized insights and care
-      </Text>
-
-      {/* Entry Form Container */}
-      <View style={styles.form}>
-        {/* Full Name field */}
-        <Text style={styles.label}>Full Name</Text>
-        <TextInput
-          placeholder="Jane Doe"
-          value={name}
-          onChangeText={setName}
-          style={styles.input}
-          placeholderTextColor="#94a3b8"
+        <Image
+          source={require("../assets/Exercise.png")}
+          style={styles.image}
+          resizeMode="cover"
         />
 
-        {/* Email Address field */}
-        <Text style={styles.label}>Email Address</Text>
-        <TextInput
-          placeholder="jane@example.com"
-          value={email}
-          onChangeText={setEmail}
-          keyboardType="email-address"
-          autoCapitalize="none"
-          style={styles.input}
-          placeholderTextColor="#94a3b8"
-        />
-
-        {/* Password Entry field */}
-        <Text style={styles.label}>Password</Text>
-        <TextInput
-          placeholder="••••••••"
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-          style={styles.input}
-          placeholderTextColor="#94a3b8"
-        />
-
-        {/* Confirm Password Entry field */}
-        <Text style={styles.label}>Confirm Password</Text>
-        <TextInput
-          placeholder="••••••••"
-          value={confirmPassword}
-          onChangeText={setConfirmPassword}
-          secureTextEntry
-          style={styles.input}
-          placeholderTextColor="#94a3b8"
-        />
-      </View>
-
-      {/* Core Form Submit CTA Button */}
-      <TouchableOpacity style={styles.button} onPress={handleCreateAccount}>
-        <Text style={styles.buttonText}>Create Account →</Text>
-      </TouchableOpacity>
-
-      {/* Divider */}
-      <View style={styles.dividerRow}>
-        <View style={styles.dividerLine} />
-        <Text style={styles.dividerText}>OR SIGN UP WITH</Text>
-        <View style={styles.dividerLine} />
-      </View>
-
-      {/* Social Signup Buttons */}
-      <View style={styles.socialRow}>
-        <TouchableOpacity style={styles.socialButton} onPress={handleGoogleSignup}>
-          <Text style={styles.googleText}>G</Text>
-          <Text style={styles.socialButtonText}>Google</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.socialButton} onPress={handleFacebookSignup}>
-          <Text style={styles.facebookText}>f</Text>
-          <Text style={styles.socialButtonText}>Facebook</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Deep-linking navigation swap across routes */}
-      <Text style={styles.loginText}>
-        Already have an account?{" "}
-        <Text
-          style={styles.loginLink}
-          onPress={() => router.push("/login")}
-        >
-          Login
+        <Text style={styles.title}>Join PMOS Wellness</Text>
+        <Text style={styles.subtitle}>
+          Begin your journey to hormonal balance with personalized insights and care
         </Text>
-      </Text>
-    </ScrollView>
-  </SafeAreaView>
+
+        <View style={styles.form}>
+          <Text style={styles.label}>Full Name</Text>
+          <TextInput
+            placeholder="Jane Doe"
+            value={name}
+            onChangeText={setName}
+            style={styles.input}
+            placeholderTextColor="#94a3b8"
+          />
+
+          <Text style={styles.label}>Email Address</Text>
+          <TextInput
+            placeholder="jane@example.com"
+            value={email}
+            onChangeText={setEmail}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            style={styles.input}
+            placeholderTextColor="#94a3b8"
+          />
+
+          <Text style={styles.label}>Password</Text>
+          <View style={styles.inputRow}>
+            <TextInput
+              placeholder="••••••••"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry={!showPassword}
+              style={[styles.input, { flex: 1 }]}
+              placeholderTextColor="#94a3b8"
+            />
+            <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+              <Icon
+                name={showPassword ? "eye-off" : "eye"}
+                size={20}
+                color="#6b7280"
+              />
+            </TouchableOpacity>
+          </View>
+
+          <Text style={styles.label}>Confirm Password</Text>
+          <View style={styles.inputRow}>
+            <TextInput
+              placeholder="••••••••"
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              secureTextEntry={!showConfirmPassword}
+              style={[styles.input, { flex: 1 }]}
+              placeholderTextColor="#94a3b8"
+            />
+            <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)}>
+              <Icon
+                name={showConfirmPassword ? "eye-off" : "eye"}
+                size={20}
+                color="#6b7280"
+              />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <TouchableOpacity style={styles.button} onPress={handleCreateAccount}>
+          <Text style={styles.buttonText}>Create Account →</Text>
+        </TouchableOpacity>
+
+        <View style={styles.dividerRow}>
+          <View style={styles.dividerLine} />
+          <Text style={styles.dividerText}>OR SIGN UP WITH</Text>
+          <View style={styles.dividerLine} />
+        </View>
+
+        <View style={styles.socialRow}>
+          <TouchableOpacity style={styles.socialButton} onPress={handleGoogleSignup}>
+            <Text style={styles.googleText}>G</Text>
+            <Text style={styles.socialButtonText}>Google</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.socialButton} onPress={handleFacebookSignup}>
+            <Text style={styles.facebookText}>f</Text>
+            <Text style={styles.socialButtonText}>Facebook</Text>
+          </TouchableOpacity>
+        </View>
+
+        <Text style={styles.loginText}>
+          Already have an account?{" "}
+          <Text
+            style={styles.loginLink}
+            onPress={() => router.push("/login")}
+          >
+            Login
+          </Text>
+        </Text>
+      </ScrollView>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#ffffff", // Pure crisp white palette shift applied
+    backgroundColor: "#ffffff",
   },
   container: {
     padding: 20,
     paddingBottom: 40,
-    backgroundColor: "#ffffff", // Pure crisp white palette shift applied
+    backgroundColor: "#ffffff",
   },
   image: {
     width: "100%",
@@ -219,6 +227,15 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: "#0f172a",
     backgroundColor: "#f8fafc",
+  },
+  inputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    borderRadius: 12,
+    backgroundColor: "#f8fafc",
+    paddingRight: 12,
   },
   button: {
     marginTop: 30,

@@ -17,8 +17,9 @@ import os
 import joblib
 import warnings
 import json
+import numpy as np
 from datetime import datetime
-from soft_voting_ensemble import SoftVotingEnsemble
+from soft_voting_ensemble import SoftVotingEnsemble  # imported, not redefined
 from sklearn.linear_model import LogisticRegression
 from sklearn.ensemble import RandomForestClassifier, VotingClassifier
 from sklearn.model_selection import (
@@ -31,6 +32,14 @@ from sklearn.metrics import (
 )
 from sklearn.calibration import CalibratedClassifierCV, calibration_curve
 from xgboost import XGBClassifier
+
+# Try to import SHAP (optional)
+try:
+    import shap
+    SHAP_AVAILABLE = True
+except ImportError:
+    SHAP_AVAILABLE = False
+    print("[WARNING] SHAP not installed. SHAP explainer will not be saved.")
 
 import matplotlib
 matplotlib.use("Agg")
@@ -76,34 +85,29 @@ XGB_PARAMS = {
     "reg_alpha": [0, 0.01, 0.1],
     "reg_lambda": [1, 1.5, 2],
 }
-# ─── Custom Soft Voting Ensemble ────────────────────────────────────────────
-import numpy as np
-from sklearn.base import BaseEstimator, ClassifierMixin, clone
 
-class SoftVotingEnsemble(BaseEstimator, ClassifierMixin):
-    """Soft voting ensemble that averages predicted probabilities."""
 
-    def __init__(self, estimators):
-        self.estimators = estimators
+# ─── JSON Encoder for NumPy types ──────────────────────────────────────────
 
-    def fit(self, X, y):
-        self.estimators_ = []
-        for name, est in self.estimators:
-            cloned = clone(est)
-            cloned.fit(X, y)
-            self.estimators_.append(cloned)
-        self.classes_ = np.unique(y)
-        return self
+class NumpyEncoder(json.JSONEncoder):
+    """Custom JSON encoder that handles NumPy types."""
+    def default(self, obj):
+        if isinstance(obj, np.integer):
+            return int(obj)
+        if isinstance(obj, np.floating):
+            return float(obj)
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        if isinstance(obj, np.str_):
+            return str(obj)
+        if isinstance(obj, np.bool_):
+            return bool(obj)
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        return super().default(obj)
 
-    def predict_proba(self, X):
-        probs = np.mean(
-            [est.predict_proba(X) for est in self.estimators_], axis=0
-        )
-        return probs
 
-    def predict(self, X):
-        proba = self.predict_proba(X)
-        return self.classes_[np.argmax(proba, axis=1)]
+# ─── Training Functions ────────────────────────────────────────────────────
 
 def train_logistic_regression(X_train, y_train):
     """Train Logistic Regression with hyperparameter tuning."""
@@ -169,7 +173,7 @@ def train_xgboost(X_train, y_train):
         xgb, XGB_PARAMS, n_iter=N_ITER_SEARCH, cv=cv, scoring="roc_auc",
         random_state=RANDOM_STATE, n_jobs=1, verbose=0
     )
-    search.fit(X_train, y_train,)
+    search.fit(X_train, y_train)
 
     best_model = search.best_estimator_
     print(f"  Best params: {search.best_params_}")
@@ -238,38 +242,6 @@ def evaluate_model(model, X_test, y_test, model_name="Model"):
     }
 
     return metrics, y_pred, y_prob
-
-
-def tune_threshold_on_validation(model, X_val, y_val):
-    """
-    Find the decision threshold that maximises F1 on the validation set.
-    This ensures the threshold is chosen WITHOUT touching the test set.
-    """
-    import numpy as np
-    from sklearn.metrics import f1_score, recall_score
-
-    y_prob = model.predict_proba(X_val)[:, 1]
-    thresholds = np.arange(0.20, 0.70, 0.01)
-
-    best_thresh = 0.50
-    best_f1 = 0.0
-    results = []
-
-    for t in thresholds:
-        y_pred = (y_prob >= t).astype(int)
-        sens = recall_score(y_val, y_pred, zero_division=0)
-        spec = recall_score(y_val, y_pred, pos_label=0, zero_division=0)
-        f1   = f1_score(y_val, y_pred, zero_division=0)
-        results.append((t, sens, spec, f1))
-
-        # Prioritise sensitivity >= 0.80 AND best F1
-        if sens >= 0.80 and f1 > best_f1:
-            best_f1 = f1
-            best_thresh = t
-
-    print(f"[INFO] Best threshold from validation: {best_thresh:.2f} "
-          f"(F1={best_f1:.4f})")
-    return best_thresh
 
 
 def plot_roc_curves(models_results, y_test):
@@ -370,6 +342,46 @@ def check_calibration_and_fix(model, X_train, y_train, X_test, y_test):
         return model
 
 
+def save_shap_explainer(model, X_sample):
+    """
+    Create and save a SHAP explainer for the best model.
+    Uses TreeExplainer if available, else KernelExplainer (fallback).
+    """
+    if not SHAP_AVAILABLE:
+        print("[INFO] SHAP not installed – skipping explainer creation.")
+        return
+
+    try:
+        # Try TreeExplainer first (fast for tree-based models)
+        if hasattr(model, "estimators_"):  # ensemble
+            base_estimator = model.estimators_[0]
+            explainer = shap.TreeExplainer(base_estimator)
+        elif hasattr(model, "calibrated_classifiers_"):
+            base = model.calibrated_classifiers_[0].estimator
+            explainer = shap.TreeExplainer(base)
+        else:
+            explainer = shap.TreeExplainer(model)
+
+        # Verify it works
+        _ = explainer.shap_values(X_sample[:5])
+        joblib.dump(explainer, os.path.join(MODEL_DIR, "shap_explainer.pkl"))
+        print(f"[INFO] SHAP explainer saved to {MODEL_DIR}/shap_explainer.pkl")
+    except Exception as e:
+        print(f"[WARNING] Could not save SHAP explainer: {e}")
+        # Fallback: save background data for KernelExplainer
+        try:
+            background = X_sample[:100]  # use 100 samples as background
+            joblib.dump({
+                "type": "kernel",
+                "background": background,
+            }, os.path.join(MODEL_DIR, "shap_explainer.pkl"))
+            print(f"[INFO] SHAP background data saved (for KernelExplainer) to {MODEL_DIR}/shap_explainer.pkl")
+        except Exception as e2:
+            print(f"[WARNING] Could not save SHAP background: {e2}")
+
+
+# ─── Main Training Pipeline ──────────────────────────────────────────────────
+
 def train_all_models():
     """
     Main training pipeline:
@@ -378,7 +390,7 @@ def train_all_models():
     3. Evaluate on test set
     4. Select best model
     5. Check calibration
-    6. Save best model
+    6. Save best model + artifacts
     """
     print("=" * 60)
     print("  PCOS Risk Prediction - Model Training Pipeline")
@@ -463,9 +475,26 @@ def train_all_models():
         best_model, X_train, y_train, X_test, y_test
     )
 
-    # Step 7: Save best model
+    # Step 7: Save model and artifacts
     os.makedirs(MODEL_DIR, exist_ok=True)
+
+    # Save best model
     joblib.dump(best_model, os.path.join(MODEL_DIR, "best_model.pkl"))
+
+    # Save scaler
+    joblib.dump(scaler, os.path.join(MODEL_DIR, "scaler.pkl"))
+
+    # Save feature names
+    joblib.dump(features, os.path.join(MODEL_DIR, "feature_names.pkl"))
+
+    # Save feature name mapping (for friendly names in API)
+    # Create a mapping from internal name to a user-friendly label
+    # You can either load from preprocess_pipeline or create a static map
+    feature_map = {f: f.replace("_", " ").title() for f in features}
+    joblib.dump(feature_map, os.path.join(MODEL_DIR, "feature_name_map.pkl"))
+
+    # Save SHAP explainer (if available)
+    save_shap_explainer(best_model, X_train)
 
     # Save evaluation report
     report = {
@@ -490,9 +519,12 @@ def train_all_models():
     }
 
     with open(os.path.join(MODEL_DIR, "evaluation_report.json"), "w") as f:
-        json.dump(report, f, indent=2)
+        json.dump(report, f, indent=2, cls=NumpyEncoder)
 
     print(f"\n[SUCCESS] Best model saved to {MODEL_DIR}/best_model.pkl")
+    print(f"[SUCCESS] Scaler saved to {MODEL_DIR}/scaler.pkl")
+    print(f"[SUCCESS] Feature names saved to {MODEL_DIR}/feature_names.pkl")
+    print(f"[SUCCESS] Feature name map saved to {MODEL_DIR}/feature_name_map.pkl")
     print(f"[SUCCESS] Evaluation report saved to {MODEL_DIR}/evaluation_report.json")
     print(f"[SUCCESS] Plots saved to {PLOTS_DIR}/")
 

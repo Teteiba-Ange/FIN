@@ -1,9 +1,13 @@
 // context/authContext.tsx
 import React, { createContext, useContext, useState, useEffect } from "react";
 import * as AuthSession from "expo-auth-session";
+import * as WebBrowser from "expo-web-browser";
 import Constants from "expo-constants";
 import apiService from "./apiService";
 import { registerForPushNotifications } from "../utils/notifications";
+
+// Required for expo-auth-session on Android to close the browser after redirect
+WebBrowser.maybeCompleteAuthSession();
 
 export interface User {
   id: string;
@@ -46,7 +50,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [token,   setToken]   = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // ── Initialise auth on app start ────────────────────────────────────────────
+  // ── Init auth on app start ────────────────────────────────────────────────
   useEffect(() => {
     const initializeAuth = async () => {
       try {
@@ -71,146 +75,185 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     initializeAuth();
   }, []);
 
-  // ── Register push token silently after auth ──────────────────────────────────
-  const registerPush = async () => {
-    try {
-      await registerForPushNotifications();
-    } catch (err) {
-      // Push registration should never crash the login flow
-      console.warn("[AUTH] Push registration failed silently:", err);
-    }
+  // ── Register push token silently (never blocks login) ────────────────────
+  const registerPush = () => {
+    registerForPushNotifications().catch((err) =>
+      console.warn("[AUTH] Push registration failed silently:", err)
+    );
   };
 
-  // ── Login ────────────────────────────────────────────────────────────────────
+  // ── Login ─────────────────────────────────────────────────────────────────
   const login = async (email: string, password: string) => {
-    const normalizedEmail = email.trim().toLowerCase();
-    const response = await apiService.login(normalizedEmail, password);
+    const response = await apiService.login(email.trim().toLowerCase(), password);
     setUser(response.user);
-    const currentToken = await apiService.getToken();
-    setToken(currentToken);
+    setToken(await apiService.getToken());
     console.log("[AUTH] Login successful:", response.user.fullName);
-    // Register push token in background — don't await so login feels instant
     registerPush();
   };
 
-  // ── Signup ───────────────────────────────────────────────────────────────────
+  // ── Signup ────────────────────────────────────────────────────────────────
   const signup = async (email: string, password: string, fullName: string) => {
-    const normalizedEmail = email.trim().toLowerCase();
-    const response = await apiService.signup(normalizedEmail, password, fullName);
+    const response = await apiService.signup(email.trim().toLowerCase(), password, fullName);
     setUser(response.user);
-    const currentToken = await apiService.getToken();
-    setToken(currentToken);
+    setToken(await apiService.getToken());
     console.log("[AUTH] Signup successful:", response.user.fullName);
-    // Register push token in background
     registerPush();
   };
 
-  // ── JWT parser helper ─────────────────────────────────────────────────────────
-  const parseJwt = (token: string) => {
+  // ── JWT decoder helper ────────────────────────────────────────────────────
+  const parseJwt = (rawToken: string): Record<string, any> | null => {
     try {
-      const base64Url = token.split(".")[1];
+      const base64Url = rawToken.split(".")[1];
       const base64    = base64Url.replace(/-/g, "+").replace(/_/g, "/");
-      const decoded   = typeof atob === "function"
-        ? atob(base64)
-        : Buffer.from(base64, "base64").toString("binary");
+      const decoded   =
+        typeof atob === "function"
+          ? atob(base64)
+          : Buffer.from(base64, "base64").toString("binary");
       if (!decoded) return null;
-      const jsonPayload = decodeURIComponent(
-        decoded.split("").map((c) => `%${(`00${c.charCodeAt(0).toString(16)}`).slice(-2)}`).join("")
+      const json = decodeURIComponent(
+        decoded
+          .split("")
+          .map((c) => `%${`00${c.charCodeAt(0).toString(16)}`.slice(-2)}`)
+          .join("")
       );
-      return JSON.parse(jsonPayload) as Record<string, any>;
+      return JSON.parse(json);
     } catch {
       return null;
     }
   };
 
-  // ── Social auth (Google / Facebook) ─────────────────────────────────────────
-  const socialAuth = async (provider: "google" | "facebook", mode: "login" | "signup") => {
-    const appConfig      = Constants.expoConfig || Constants.manifest;
-    const googleClientId = appConfig?.extra?.googleClientId || "YOUR_GOOGLE_CLIENT_ID";
-    const facebookAppId  = appConfig?.extra?.facebookAppId  || "YOUR_FACEBOOK_APP_ID";
-    const redirectUri    = AuthSession.makeRedirectUri({ useProxy: true, scheme: "pcosscreeningapp" });
-    let authUrl  = "";
+  // ── Social auth ───────────────────────────────────────────────────────────
+  const socialAuth = async (
+    provider: "google" | "facebook",
+    mode: "login" | "signup"
+  ) => {
+    const appConfig      = Constants.expoConfig ?? (Constants as any).manifest;
+    const googleClientId = appConfig?.extra?.googleClientId ?? "YOUR_GOOGLE_CLIENT_ID";
+    const facebookAppId  = appConfig?.extra?.facebookAppId  ?? "YOUR_FACEBOOK_APP_ID";
+
+    // ── FIX 1: useProxy removed — use scheme-based redirect instead ──────────
+    const redirectUri = AuthSession.makeRedirectUri({
+      scheme: "pcosscreeningapp",   // must match your app.json scheme
+    });
+
     let socialToken: string | null = null;
     let userInfo: { email?: string; name?: string; id?: string } | null = null;
-    const nonce = Math.random().toString(36).substring(2, 12) + Date.now().toString(36);
+    const nonce = Math.random().toString(36).slice(2, 12) + Date.now().toString(36);
 
+    // ── Google ────────────────────────────────────────────────────────────────
     if (provider === "google") {
       if (!googleClientId || googleClientId === "YOUR_GOOGLE_CLIENT_ID")
-        throw new Error("Google Client ID is not configured.");
+        throw new Error("Google Client ID is not configured in app.json extras.");
 
-      authUrl = `https://accounts.google.com/o/oauth2/v2/auth?response_type=id_token` +
+      const authUrl =
+        `https://accounts.google.com/o/oauth2/v2/auth?response_type=id_token` +
         `&client_id=${encodeURIComponent(googleClientId)}` +
         `&redirect_uri=${encodeURIComponent(redirectUri)}` +
         `&scope=${encodeURIComponent("openid email profile")}` +
         `&nonce=${encodeURIComponent(nonce)}&prompt=select_account`;
 
-      const result = await startAsync({ authUrl, returnUrl: redirectUri });
-      if (result.type !== "success" || !result.params?.id_token)
+      // ── FIX 2: startAsync is removed — use openAuthSessionAsync instead ────
+      const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUri);
+
+      if (result.type !== "success")
         throw new Error("Google authentication was cancelled or failed.");
 
-      socialToken = result.params.id_token as string;
+      // Parse id_token from the redirect URL fragment
+      const url    = result.url;
+      const params = new URLSearchParams(url.split("#")[1] ?? url.split("?")[1] ?? "");
+      const idToken = params.get("id_token");
+
+      if (!idToken) throw new Error("Google did not return an id_token.");
+
+      socialToken = idToken;
       const decoded = parseJwt(socialToken);
       if (!decoded?.email || !decoded.email_verified)
         throw new Error("Google did not return a verified email.");
 
-      userInfo = { email: decoded.email, name: decoded.name || decoded.email, id: decoded.sub };
+      userInfo = {
+        email: decoded.email,
+        name:  decoded.name ?? decoded.given_name ?? decoded.email,
+        id:    decoded.sub,
+      };
     }
 
+    // ── Facebook ──────────────────────────────────────────────────────────────
     if (provider === "facebook") {
       if (!facebookAppId || facebookAppId === "YOUR_FACEBOOK_APP_ID")
-        throw new Error("Facebook App ID is not configured.");
+        throw new Error("Facebook App ID is not configured in app.json extras.");
 
-      authUrl = `https://www.facebook.com/v15.0/dialog/oauth?client_id=${encodeURIComponent(facebookAppId)}` +
-        `&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=token` +
+      const authUrl =
+        `https://www.facebook.com/v15.0/dialog/oauth` +
+        `?client_id=${encodeURIComponent(facebookAppId)}` +
+        `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+        `&response_type=token` +
         `&scope=${encodeURIComponent("email,public_profile")}`;
 
-      const result = await startAsync({ authUrl, returnUrl: redirectUri });
-      if (result.type !== "success" || !result.params?.access_token)
+      // ── FIX 2 (same): use openAuthSessionAsync ────────────────────────────
+      const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUri);
+
+      if (result.type !== "success")
         throw new Error("Facebook authentication was cancelled or failed.");
 
-      socialToken = result.params.access_token as string;
+      const url    = result.url;
+      const params = new URLSearchParams(url.split("#")[1] ?? url.split("?")[1] ?? "");
+      const accessToken = params.get("access_token");
+
+      if (!accessToken) throw new Error("Facebook did not return an access_token.");
+
+      socialToken = accessToken;
+
       const profileRes = await fetch(
         `https://graph.facebook.com/me?access_token=${encodeURIComponent(socialToken)}&fields=id,name,email`
       );
       if (!profileRes.ok) throw new Error("Unable to verify Facebook profile.");
+
       const profileJson = await profileRes.json();
-      if (!profileJson.email) throw new Error("Facebook did not return a verified email.");
-      userInfo = { email: profileJson.email, name: profileJson.name, id: profileJson.id };
+      if (!profileJson.email) throw new Error("Facebook did not return an email.");
+
+      userInfo = {
+        email: profileJson.email,
+        name:  profileJson.name,
+        id:    profileJson.id,
+      };
     }
 
     if (!userInfo?.email) throw new Error("Unable to verify social account email.");
 
     const socialUser: User = {
-      id:       userInfo.id || `${provider}-user`,
+      id:       userInfo.id ?? `${provider}-user`,
       email:    userInfo.email,
-      fullName: userInfo.name || userInfo.email,
+      fullName: userInfo.name ?? userInfo.email,
     };
+
     setUser(socialUser);
     setToken(socialToken);
-    await apiService.setToken(socialToken || "");
+    await apiService.setToken(socialToken ?? "");
     registerPush();
     console.log(`[AUTH] Social ${mode} with ${provider} succeeded`);
   };
 
-  // ── Logout ───────────────────────────────────────────────────────────────────
+  // ── Logout ────────────────────────────────────────────────────────────────
   const logout = async () => {
     try {
       const rToken = await apiService.getRefreshToken();
       if (rToken) await apiService.logout().catch(() => {});
-    } catch {/* silent */}
+    } catch {
+      /* silent */
+    }
     setUser(null);
     setToken(null);
     await apiService.setTokens(null, null);
     console.log("[AUTH] Logged out");
   };
 
-  // ── Profile helpers ───────────────────────────────────────────────────────────
+  // ── Profile helpers ───────────────────────────────────────────────────────
   const updateProfile = async (updates: Partial<User>) => {
     await apiService.updateProfile(
-      updates.fullName || "",
-      updates.age     !== undefined ? String(updates.age)    : "",
-      updates.weight  !== undefined ? String(updates.weight) : "",
-      updates.height  !== undefined ? String(updates.height) : ""
+      updates.fullName ?? "",
+      updates.age     != null ? String(updates.age)    : "",
+      updates.weight  != null ? String(updates.weight) : "",
+      updates.height  != null ? String(updates.height) : ""
     );
     await refreshProfile();
   };
@@ -226,11 +269,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{
-      user, token, loading,
-      login, signup, socialAuth, logout,
-      updateProfile, setAvatarUri, refreshProfile,
-    }}>
+    <AuthContext.Provider
+      value={{
+        user, token, loading,
+        login, signup, socialAuth, logout,
+        updateProfile, setAvatarUri, refreshProfile,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

@@ -13,6 +13,8 @@ import {
 import React, { useState } from "react";
 import { useRouter } from "expo-router";
 import { useAuth } from "../context/authContext";
+// @ts-ignore: module may not have type declarations in this project
+import Icon from 'react-native-vector-icons/Feather'; // ← added
 
 type LoginProps = {
   navigation?: any;
@@ -34,21 +36,14 @@ const Login = ({ navigation }: LoginProps) => {
 
     try {
       setLoginLoading(true);
-
-      // Call login from context — this should store the token/user internally
       await login(email.trim().toLowerCase(), password);
-
-      // Navigate to the authenticated home tab after successful login
       router.replace("/profile");
     } catch (error: any) {
-      console.log("Login error:", error); // helps debug
-
-      // Show whatever error the server returned
+      console.log("Login error:", error);
       const message =
         error?.response?.data?.error ||
         error?.message ||
         "Invalid email or password. Please try again.";
-
       Alert.alert("Login Failed", message);
     } finally {
       setLoginLoading(false);
@@ -94,115 +89,111 @@ const Login = ({ navigation }: LoginProps) => {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-      {/* App Logo */}
-      <View style={styles.logoContainer}>
-        <Image
-          source={require("../assets/logo.png")}
-          style={styles.logo}
-          resizeMode="contain"
-        />
-      </View>
-
-      {/* Title */}
-      <Text style={styles.title}>Welcome Back</Text>
-
-      {/* Subtitle */}
-      <Text style={styles.subtitle}>
-        Your journey to hormonal harmony continues here.
-      </Text>
-
-      {/* Form Card */}
-      <View style={styles.card}>
-        {/* Email */}
-        <Text style={styles.label}>Email Address</Text>
-        <View style={styles.inputRow}>
-          <Text style={styles.inputIcon}>✉️</Text>
-          <TextInput
-            placeholder="name@example.com"
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoCorrect={false}
-            style={styles.input}
-            placeholderTextColor="#aaa"
+        {/* App Logo */}
+        <View style={styles.logoContainer}>
+          <Image
+            source={require("../assets/logo.png")}
+            style={styles.logo}
+            resizeMode="contain"
           />
         </View>
 
-        {/* Password */}
-        <View style={styles.passwordHeader}>
-          <Text style={styles.label}>Password</Text>
-          <TouchableOpacity>
-            <Text style={styles.forgotText}>Forgot Password?</Text>
-          </TouchableOpacity>
-        </View>
-        <View style={styles.inputRow}>
-          <Text style={styles.inputIcon}>🔒</Text>
-          <TextInput
-            placeholder="••••••••"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry={!showPassword}
-            style={[styles.input, { flex: 1 }]}
-            placeholderTextColor="#aaa"
-            autoCorrect={false}
-            autoCapitalize="none"
-          />
-          <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-            <Text style={styles.eyeIcon}>{showPassword ? "🙈" : "👁️"}</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* Login Button */}
-      <TouchableOpacity
-        style={[styles.button, loginLoading && styles.buttonDisabled]}
-        onPress={handleLogin}
-        disabled={loginLoading}
-        activeOpacity={0.8}
-      >
-        {loginLoading ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={styles.buttonText}>Login →</Text>
-        )}
-      </TouchableOpacity>
-
-      {/* Divider */}
-      <View style={styles.dividerRow}>
-        <View style={styles.dividerLine} />
-        <Text style={styles.dividerText}>OR CONTINUE WITH</Text>
-        <View style={styles.dividerLine} />
-      </View>
-
-      {/* Social Buttons */}
-      <View style={styles.socialRow}>
-        <TouchableOpacity style={styles.socialButton} onPress={handleGoogleLogin}>
-          <Text style={styles.googleText}>G</Text>
-          <Text style={styles.socialButtonText}>Google</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.socialButton} onPress={handleFacebookLogin}>
-          <Text style={styles.facebookText}>f</Text>
-          <Text style={styles.socialButtonText}>Facebook</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Sign Up Link */}
-      <Text style={styles.signupText}>
-        Don't have an account?{" "}
-        <Text
-          style={styles.signupLink}
-          onPress={() => router.push("/signup")}
-        >
-          Sign Up
+        <Text style={styles.title}>Welcome Back</Text>
+        <Text style={styles.subtitle}>
+          Your journey to hormonal harmony continues here.
         </Text>
-      </Text>
-    </ScrollView>
-  </SafeAreaView>
+
+        {/* Form Card */}
+        <View style={styles.card}>
+          <Text style={styles.label}>Email Address</Text>
+          <View style={styles.inputRow}>
+            <Text style={styles.inputIcon}>✉️</Text>
+            <TextInput
+              placeholder="name@example.com"
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+              style={styles.input}
+              placeholderTextColor="#aaa"
+            />
+          </View>
+
+          <View style={styles.passwordHeader}>
+            <Text style={styles.label}>Password</Text>
+            <TouchableOpacity>
+              <Text style={styles.forgotText}>Forgot Password?</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.inputRow}>
+            <Text style={styles.inputIcon}>🔒</Text>
+            <TextInput
+              placeholder="••••••••"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry={!showPassword}
+              style={[styles.input, { flex: 1 }]}
+              placeholderTextColor="#aaa"
+              autoCorrect={false}
+              autoCapitalize="none"
+            />
+            <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
+              <Icon
+                name={showPassword ? "eye-off" : "eye"}
+                size={20}
+                color="#6b7280"
+              />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <TouchableOpacity
+          style={[styles.button, loginLoading && styles.buttonDisabled]}
+          onPress={handleLogin}
+          disabled={loginLoading}
+          activeOpacity={0.8}
+        >
+          {loginLoading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.buttonText}>Login →</Text>
+          )}
+        </TouchableOpacity>
+
+        <View style={styles.dividerRow}>
+          <View style={styles.dividerLine} />
+          <Text style={styles.dividerText}>OR CONTINUE WITH</Text>
+          <View style={styles.dividerLine} />
+        </View>
+
+        <View style={styles.socialRow}>
+          <TouchableOpacity style={styles.socialButton} onPress={handleGoogleLogin}>
+            <Text style={styles.googleText}>G</Text>
+            <Text style={styles.socialButtonText}>Google</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.socialButton} onPress={handleFacebookLogin}>
+            <Text style={styles.facebookText}>f</Text>
+            <Text style={styles.socialButtonText}>Facebook</Text>
+          </TouchableOpacity>
+        </View>
+
+        <Text style={styles.signupText}>
+          Don't have an account?{" "}
+          <Text
+            style={styles.signupLink}
+            onPress={() => router.push("/signup")}
+          >
+            Sign Up
+          </Text>
+        </Text>
+      </ScrollView>
+    </SafeAreaView>
   );
 };
 
+// styles unchanged (except no eye emoji styles needed)
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
@@ -215,8 +206,6 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
     alignItems: "center",
   },
-
-  // Logo
   logoContainer: {
     marginTop: 60,
     marginBottom: 20,
@@ -235,8 +224,6 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
   },
-
-  // Title / subtitle
   title: {
     fontSize: 26,
     fontWeight: "700",
@@ -252,8 +239,6 @@ const styles = StyleSheet.create({
     marginBottom: 28,
     paddingHorizontal: 10,
   },
-
-  // Card
   card: {
     width: "100%",
     backgroundColor: "#fff",
@@ -265,8 +250,6 @@ const styles = StyleSheet.create({
     elevation: 2,
     marginBottom: 20,
   },
-
-  // Labels
   label: {
     fontSize: 13,
     color: "#6b7280",
@@ -283,8 +266,6 @@ const styles = StyleSheet.create({
     color: "#1f7a7a",
     fontWeight: "600",
   },
-
-  // Input rows
   inputRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -299,18 +280,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginRight: 8,
   },
-  eyeIcon: {
-    fontSize: 16,
-    marginLeft: 8,
-  },
   input: {
     flex: 1,
     fontSize: 14,
     color: "#1a1a1a",
     paddingVertical: 10,
   },
-
-  // Login Button
   button: {
     width: "100%",
     backgroundColor: "#1f7a7a",
@@ -334,8 +309,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: "#f5f7fa",
   },
-
-  // Divider
   dividerRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -353,8 +326,6 @@ const styles = StyleSheet.create({
     marginHorizontal: 10,
     letterSpacing: 0.5,
   },
-
-  // Social buttons
   socialRow: {
     flexDirection: "row",
     gap: 12,
@@ -388,8 +359,6 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#1877F2",
   },
-
-  // Sign up link
   signupText: {
     fontSize: 14,
     color: "#6b7280",

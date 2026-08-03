@@ -6,19 +6,26 @@ import { Platform } from "react-native";
 import { router } from "expo-router";
 import apiService from "../context/apiService";
 
-// ── How notifications appear when the app is open ────────────────────────────
+// ── FIX 1: SDK 53 removed shouldSetBadge from setNotificationHandler ─────────
+// The entire handleNotification config shape changed — use the new format below.
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
     shouldPlaySound: true,
-    shouldSetBadge:  true,
+    shouldSetBadge: false,   // ← must be false in SDK 53; badge is managed separately
+    priority: Notifications.AndroidNotificationPriority.HIGH,
   }),
 });
 
 /**
  * Call once after login/signup.
  * Asks for permission → gets Expo push token → saves to backend.
- * Safe to call multiple times (idempotent).
+ *
+ * NOTE: Remote push notifications (getExpoPushTokenAsync) require a
+ * Development Build — they do NOT work in Expo Go from SDK 53 onwards.
+ * Run:  npx expo run:android   OR   npx expo run:ios
  */
 export const registerForPushNotifications = async (): Promise<string | null> => {
   if (!Device.isDevice) {
@@ -26,7 +33,7 @@ export const registerForPushNotifications = async (): Promise<string | null> => 
     return null;
   }
 
-  // Check existing permission
+  // Check / request permission
   const { status: existingStatus } = await Notifications.getPermissionsAsync();
   let finalStatus = existingStatus;
 
@@ -40,7 +47,7 @@ export const registerForPushNotifications = async (): Promise<string | null> => 
     return null;
   }
 
-  // Android notification channel
+  // Android needs a named notification channel
   if (Platform.OS === "android") {
     await Notifications.setNotificationChannelAsync("pmos-reminders", {
       name:             "PMOS Reminders",
@@ -51,64 +58,84 @@ export const registerForPushNotifications = async (): Promise<string | null> => 
     });
   }
 
-  // Get Expo push token
-  const projectId = Constants.expoConfig?.extra?.eas?.projectId;
-  const { data: token } = await Notifications.getExpoPushTokenAsync(
-    projectId ? { projectId } : undefined
-  );
+  // ── FIX 2: getExpoPushTokenAsync cannot receive undefined ─────────────────
+  // Must always pass an object. If no projectId, fall back to local device token.
+  let token: string | null = null;
 
-  console.log("[PUSH] Token:", token);
+  try {
+    const projectId = Constants.expoConfig?.extra?.eas?.projectId as string | undefined;
 
-  // Save to backend — wrapped so it never crashes the auth flow
+    if (projectId) {
+      // Remote push token — works only in a Development Build, not Expo Go
+      const result = await Notifications.getExpoPushTokenAsync({ projectId });
+      token = result.data;
+    } else {
+      // Local device token — works in Expo Go for local/testing notifications
+      const result = await Notifications.getDevicePushTokenAsync();
+      token = result.data as string;
+      console.log("[PUSH] No projectId found — using device token (local only)");
+    }
+  } catch (err) {
+    console.warn(
+      "[PUSH] Could not get push token. " +
+      "If you are using Expo Go, remote push notifications require a Development Build. " +
+      "Run: npx expo run:android",
+      err
+    );
+    return null;
+  }
+
+  if (!token) return null;
+  console.log("[PUSH] Token obtained:", token);
+
+  // ── FIX 3: savePushToken must exist on apiService ─────────────────────────
+  // See apiService addition below. Wrapped so it never crashes the auth flow.
   try {
     await apiService.savePushToken(token);
-    console.log("[PUSH] Token saved to backend");
+    console.log("[PUSH] Token saved to backend ✅");
   } catch (err) {
-    console.warn("[PUSH] Could not save token to backend:", err);
+    console.warn("[PUSH] Could not save token to backend (non-fatal):", err);
   }
 
   return token;
 };
 
-/**
- * Screen map — maps the data.screen value from notifications
- * to the actual Expo Router path.
- */
+// ── Screen route map ──────────────────────────────────────────────────────────
 const SCREEN_MAP: Record<string, string> = {
-  "symptom-log":     "/(drawer)/symptom-log",
-  "cycle-tracker":   "/(drawer)/cycle-tracker",
-  "wellness-library":"/(drawer)/wellness-library",
-  "community-feed":  "/(drawer)/community-feed",
-  "dashboard":       "/(drawer)/drawer",
-  "profile":         "/(drawer)/profile",
+  "symptom-log":      "/(drawer)/symptom-log",
+  "cycle-tracker":    "/(drawer)/cycle-tracker",
+  "wellness-library": "/(drawer)/wellness-library",
+  "community-feed":   "/(drawer)/community-feed",
+  "dashboard":        "/(drawer)/drawer",
+  "profile":          "/(drawer)/profile",
 };
 
 /**
  * Attach notification listeners for the app lifetime.
- * Returns a cleanup function — call it in a useEffect return.
+ * Returns a cleanup function to use in useEffect.
  *
- * Usage in _layout.tsx:
+ * Usage in app/_layout.tsx:
  *   useEffect(() => {
  *     const cleanup = useNotificationListeners();
  *     return cleanup;
  *   }, []);
  */
 export const useNotificationListeners = () => {
-  // Fired when a notification arrives while the app is open
+  // Fires when notification arrives while app is open
   const receivedListener = Notifications.addNotificationReceivedListener(
     (notification) => {
-      console.log("[PUSH] Received while app open:", notification.request.content.title);
+      console.log("[PUSH] Received:", notification.request.content.title);
     }
   );
 
-  // Fired when the user taps the notification
+  // Fires when user taps the notification banner
   const responseListener = Notifications.addNotificationResponseReceivedListener(
     (response) => {
       const screen = response.notification.request.content.data?.screen as string | undefined;
-      console.log("[PUSH] User tapped notification, screen:", screen);
+      console.log("[PUSH] Tapped — navigating to:", screen);
 
       if (screen) {
-        const route = SCREEN_MAP[screen] || screen;
+        const route = SCREEN_MAP[screen] ?? screen;
         try {
           router.push(route as any);
         } catch (err) {
@@ -118,7 +145,6 @@ export const useNotificationListeners = () => {
     }
   );
 
-  // Return cleanup function
   return () => {
     receivedListener.remove();
     responseListener.remove();

@@ -54,6 +54,7 @@ export default function TabsLayout() {
       
       {/* Hide specific internal route folders from the tab bar */}
       <Tabs.Screen name="assessment" options={{ href: null }} />
+      <Tabs.Screen name="settings" options={{ headerShown: false }} />
     </Tabs>
   );
 }

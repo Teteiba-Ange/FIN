@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, Button, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { getMoodEntries, saveMoodEntries } from '../../utils/storage';
+import { useRouter } from "expo-router";
+const router = useRouter();
 
 const MOODS = [
   { label: '😊 Happy', value: 5 },
@@ -67,6 +69,7 @@ export default function MentalWellbeingScreen() {
       <Button title="Save Mood" onPress={handleSave} />
 
       <Text style={styles.subtitle}>Mood History</Text>
+      
       {entries.slice(0, 5).map((entry) => (
         <View key={entry.id} style={styles.entryItem}>
           <Text>{new Date(entry.date).toLocaleDateString()} - Mood: {entry.mood}/5</Text>

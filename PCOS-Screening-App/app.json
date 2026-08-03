@@ -13,13 +13,12 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+         "backgroundColor": "#1f7a7a",
+         "foregroundImage": "./assets/logo.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.anonymous.PCOSScreeningApp"
     },
     "web": {
       "output": "static",
@@ -41,14 +40,15 @@
         }
       ],
       "expo-font",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
     },
     "extra": {
-      "googleClientId": "YOUR_GOOGLE_CLIENT_ID",
+      "googleClientId": "125379670731-j8lpa594k9rib4825e58m75gudv2fu7j.apps.googleusercontent.com",
       "facebookAppId": "YOUR_FACEBOOK_APP_ID"
     }
   }

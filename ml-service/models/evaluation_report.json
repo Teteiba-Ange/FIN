@@ -1,5 +1,5 @@
 {
-  "training_date": "2026-07-28T12:48:54.538269",
+  "training_date": "2026-08-03T13:42:52.633973",
   "best_model": "Random Forest",
   "all_results": [
     {
@@ -84,4 +84,9 @@
   "nfr14_compliance": {
     "auc_threshold": 0.85,
     "auc_achieved": 0.9994,
-    "auc_met": 
+    "auc_met": true,
+    "sensitivity_threshold": 0.8,
+    "sensitivity_achieved": 0.9836,
+    "sensitivity_met": true
+  }
+}

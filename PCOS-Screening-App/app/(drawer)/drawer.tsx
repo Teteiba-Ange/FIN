@@ -278,7 +278,7 @@ export default function DashboardScreen() {
     { icon: "🔴", label: "Androgenic Acne",       value: 70, color: RED },
   ];
 
-  // Quick access features array
+  // Quick access features array (removed upload-reports and admin)
   const features = [
     { name: 'Symptom Log', screen: 'symptom-log', icon: '📝' },
     { name: 'Cycle Tracker', screen: 'cycle-tracker', icon: '🔄' },
@@ -287,21 +287,30 @@ export default function DashboardScreen() {
     { name: 'Wellness Library', screen: 'wellness-library', icon: '📚' },
     { name: 'Community Forum', screen: 'community-feed', icon: '💬' },
     { name: 'Notifications', screen: 'notification-settings', icon: '🔔' },
-    { name: 'Admin', screen: 'admin/moderation', icon: '⚙️' },
   ];
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      {/* Dynamic Header Space */}
+      {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+        <TouchableOpacity 
+          onPress={() => router.back()} 
+          style={styles.backBtn}
+        >
           <Text style={styles.backIcon}>←</Text>
         </TouchableOpacity>
+
         <View style={{ flex: 1, marginLeft: 12 }}>
           <Text style={styles.headerTitle}>Assessment Analysis</Text>
-          <Text style={styles.headerSub}>Hormone & Metabolic Workspace for {firstName} ✨</Text>
+          <Text style={styles.headerSub}>
+            Hormone & Metabolic Workspace for {firstName} ✨
+          </Text>
         </View>
-        <TouchableOpacity style={styles.assessBtn} onPress={() => router.push("/assess")}>
+
+        <TouchableOpacity
+          style={styles.assessBtn}
+          onPress={() => router.push("/assess")}
+        >
           <Text style={styles.assessBtnText}>Re-Assess</Text>
         </TouchableOpacity>
       </View>
@@ -369,12 +378,33 @@ export default function DashboardScreen() {
           ))}
         </View>
 
+        {/* --- NEW: Mindfulness Card --- */}
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Text style={styles.cardTitle}>🧘 Mindfulness & Breathing</Text>
+            <View style={[styles.badge, { backgroundColor: "#f0fdf4" }]}>
+              <Text style={[styles.badgeText, { color: "#22c55e" }]}>Stress Relief</Text>
+            </View>
+          </View>
+          <Text style={styles.cardDescriptionSub}>
+            Guided breathing exercises proven to reduce cortisol and improve hormonal balance.
+            Take a 5‑minute pause to reset your mind and body.
+          </Text>
+          <TouchableOpacity
+            style={[styles.startBtn, { backgroundColor: TEAL, marginTop: 12 }]}
+            onPress={() => router.push("/(drawer)/mindfulness")}
+          >
+            <Text style={styles.startBtnText}>Open Mindfulness →</Text>
+          </TouchableOpacity>
+        </View>
+
         {/* Clinically Driven Personalized Care Recommendations */}
         <Text style={styles.sectionTitle}>TAILORED METABOLIC PROTOCOLS</Text>
         {[
           { icon: "🥗", title: "Adopt Low-Glycemic Load Diet Strategy", sub: "Reduces circulating insulin levels to stabilize ovarian pathways.", color: GREEN },
           { icon: "🏃‍♀️", title: "Targeted Resistance & Low-Intensity Movement", sub: "Optimizes muscle glucose receptors without triggering cortisol spikes.", color: TEAL },
           { icon: "💊", title: "Review Myo-Inositol & Micronutrient Supplementation", sub: "Aids intracellular messenger signaling processes for period regularity.", color: ORANGE },
+          
         ].map((rec, index) => (
           <TouchableOpacity key={index} style={[styles.recCard, { borderLeftColor: rec.color }]}>
             <Text style={styles.recIcon}>{rec.icon}</Text>
@@ -397,14 +427,14 @@ export default function DashboardScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* ── NEW: QUICK ACCESS FEATURES ── */}
+        {/* ── QUICK ACCESS FEATURES ── */}
         <Text style={styles.sectionTitle}>EXPLORE TOOLS</Text>
         <View style={styles.featureGrid}>
           {features.map((item) => (
             <TouchableOpacity
               key={item.screen}
               style={styles.featureCard}
-              onPress={() => router.push(item.screen)}
+              onPress={() => router.push(item.screen as any)}
             >
               <Text style={styles.featureIcon}>{item.icon}</Text>
               <Text style={styles.featureName}>{item.name}</Text>
@@ -501,7 +531,7 @@ const styles = StyleSheet.create({
   recTitle: { fontSize: 13, fontWeight: "800", color: "#1e293b" },
   recSub: { fontSize: 12, color: "#64748b", marginTop: 3, lineHeight: 16 },
 
-  // Quick Access Feature Grid (NEW)
+  // Quick Access Feature Grid
   featureGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -540,4 +570,16 @@ const styles = StyleSheet.create({
   ctaSub: { fontSize: 12, color: "rgba(255,255,255,0.8)", lineHeight: 18, marginBottom: 14 },
   ctaButton: { backgroundColor: "#fff", borderRadius: 12, paddingVertical: 12, alignItems: "center", width: "100%" },
   ctaButtonText: { color: TEAL_DARK, fontSize: 13, fontWeight: "800" },
+
+  // Mindfulness card button
+  startBtn: {
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: "center",
+  },
+  startBtnText: {
+    color: "#fff",
+    fontSize: 15,
+    fontWeight: "700",
+  },
 });

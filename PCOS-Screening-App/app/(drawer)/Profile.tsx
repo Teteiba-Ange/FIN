@@ -112,7 +112,7 @@ export default function ProfileScreen() {
     <SafeAreaView style={styles.safeArea}>
       {/* Nav */}
       <View style={styles.navBar}>
-        <TouchableOpacity onPress={() => router.push("/drawer")}>
+        <TouchableOpacity onPress={() => router.push("/")}>
           <Text style={styles.navIcon}>☰</Text>
         </TouchableOpacity>
         <Text style={styles.navTitle}>PCOS Wellness</Text>
@@ -131,7 +131,7 @@ export default function ProfileScreen() {
           </View>
           <TouchableOpacity
             style={styles.editButton}
-            onPress={() => router.push("/(drawer)/edit-profile")}
+            onPress={() => router.push("/edit-profile")}
           >
             <Text style={styles.editButtonText}>Edit</Text>
           </TouchableOpacity>
