@@ -10,7 +10,7 @@ const TEAL_LIGHT = "#e6f4f4";
 type Phase = "Inhale" | "Hold" | "Exhale";
 
 interface Props {
-  phase: Phase;
+  phase: String;
 }
 
 const PHASE_CONFIG: Record<Phase, { scale: number; color: string; label: string }> = {

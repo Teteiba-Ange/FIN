@@ -1,10 +1,10 @@
 {
-  "training_date": "2026-08-03T13:42:52.633973",
+  "training_date": "2026-08-10T13:26:47.207784",
   "best_model": "Random Forest",
   "all_results": [
     {
       "model_name": "Logistic Regression",
-      "auc_roc": 0.8972,
+      "auc_roc": 0.8973,
       "accuracy": 0.805,
       "precision": 0.6341,
       "sensitivity_recall": 0.8525,
@@ -44,7 +44,7 @@
       "specificity": 0.9856,
       "f1_score": 0.9756,
       "brier_score": 0.0149,
-      "cv_auc": 0.9983
+      "cv_auc": NaN
     }
   ],
   "best_result": {
