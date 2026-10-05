@@ -1,16 +1,43 @@
-import React, { useEffect, useState } from "react";
+// app/(tabs)/forum.tsx
+/**
+ * Community.
+ *
+ * Rebuilt on the design system. Beyond the 41 hardcoded hex values, this
+ * screen had four behavioural problems:
+ *
+ *   - It displayed "24 Active Posts" and "12 New Comments" as string
+ *     literals. They read as live metrics, never changed, and showed on an
+ *     empty forum. Both are now derived, or absent. (C-02 in PLAN.md.)
+ *   - `loading`, `error` and `submittingPost` were all computed and none were
+ *     ever rendered — lint had been flagging them as unused. A failed fetch
+ *     showed an empty list indistinguishable from a quiet forum.
+ *   - There was no pull-to-refresh and no empty state.
+ *   - Every like and every comment refetched the entire feed. Likes are now
+ *     optimistic and roll back on failure.
+ *
+ * Rows are memoised (`PostCard`) so typing a comment doesn't re-render every
+ * post in the list.
+ */
+
+import React, { memo, useCallback, useEffect, useMemo, useState } from "react";
+import { FlatList, Platform, RefreshControl, StyleSheet, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { SafeAreaView } from "react-native-safe-area-context";
+
 import {
-  View,
+  ScreenHeader,
+  Card,
+  Button,
+  Field,
+  Chip,
   Text,
-  StyleSheet,
-  FlatList,
-  TextInput,
-  TouchableOpacity,
-  SafeAreaView,
-  Alert,
-} from "react-native";
-import { useAuth } from "../../context/authContext";
-import apiService from "../../context/apiService";
+  EmptyState,
+  SkeletonRows,
+  useToast,
+} from "@/components/ui";
+import { useAuth } from "@/features/auth";
+import { apiService } from "@/lib/api";
+import { useTheme, spacing, radius } from "@/theme";
 
 type Comment = {
   id: string;
@@ -28,511 +55,443 @@ type Post = {
   comments: Comment[];
 };
 
-export default function ForumScreen() {
-  const { user } = useAuth();
-  const [postText, setPostText] = useState("");
+const MAX_POST_LENGTH = 1000;
+
+// ─── Post row ────────────────────────────────────────────────────────────────
+
+type PostCardProps = {
+  post: Post;
+  liked: boolean;
+  expanded: boolean;
+  onToggleComments: (id: string) => void;
+  onLike: (id: string) => void;
+  onComment: (id: string, text: string, anonymous: boolean) => Promise<void>;
+  canPost: boolean;
+};
+
+const PostCard = memo(function PostCard({
+  post,
+  liked,
+  expanded,
+  onToggleComments,
+  onLike,
+  onComment,
+  canPost,
+}: PostCardProps) {
+  const { colors } = useTheme();
+  const [reply, setReply] = useState("");
   const [anonymous, setAnonymous] = useState(false);
-  const [commentText, setCommentText] = useState("");
-  const [commentAnonymous, setCommentAnonymous] = useState(false);
-  const [activeCommentsPostId, setActiveCommentsPostId] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
+
+  const author = post.anonymous ? "Anonymous" : post.username;
+
+  const submitReply = async () => {
+    if (!reply.trim()) return;
+    setSending(true);
+    try {
+      await onComment(post.id, reply.trim(), anonymous);
+      setReply("");
+      setAnonymous(false);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <Card style={styles.post}>
+      <View style={styles.postHead}>
+        <View
+          style={[styles.avatar, { backgroundColor: colors.sunken }]}
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+        >
+          <Ionicons
+            name={post.anonymous ? "eye-off-outline" : "person-outline"}
+            size={16}
+            color={colors.textSecondary}
+          />
+        </View>
+        <Text variant="bodyStrong" style={styles.author} numberOfLines={1}>
+          {author}
+        </Text>
+      </View>
+
+      <Text variant="body" color="textSecondary" style={styles.postBody}>
+        {post.content}
+      </Text>
+
+      <View style={[styles.postActions, { borderTopColor: colors.border }]}>
+        <Button
+          label={
+            liked
+              ? `Liked · ${post.likes}`
+              : post.likes === 1
+                ? "1 like"
+                : `${post.likes} likes`
+          }
+          onPress={() => onLike(post.id)}
+          variant="ghost"
+          size="sm"
+          icon={liked ? "heart" : "heart-outline"}
+          fullWidth={false}
+          accessibilityLabel={
+            liked
+              ? `You liked this post. ${post.likes} likes so far.`
+              : `Like this post. ${post.likes} likes so far.`
+          }
+        />
+        <Button
+          label={
+            post.comments.length === 1 ? "1 reply" : `${post.comments.length} replies`
+          }
+          onPress={() => onToggleComments(post.id)}
+          variant="ghost"
+          size="sm"
+          icon={expanded ? "chevron-up-outline" : "chatbubble-outline"}
+          fullWidth={false}
+          accessibilityLabel={`${expanded ? "Hide" : "Show"} replies. ${
+            post.comments.length
+          } so far.`}
+        />
+      </View>
+
+      {expanded && (
+        <View style={[styles.comments, { borderTopColor: colors.border }]}>
+          {post.comments.length > 0 ? (
+            post.comments.map((c) => (
+              <View key={c.id} style={[styles.comment, { backgroundColor: colors.sunken }]}>
+                <Text variant="caption" color="textSecondary">
+                  {c.anonymous ? "Anonymous" : c.username}
+                </Text>
+                <Text variant="callout">{c.text}</Text>
+              </View>
+            ))
+          ) : (
+            <Text variant="callout" color="textTertiary" style={styles.noComments}>
+              No replies yet. Yours would be the first.
+            </Text>
+          )}
+
+          {canPost && (
+            <View style={styles.replyBox}>
+              <Field
+                label="Your reply"
+                placeholder="Share what helped you…"
+                value={reply}
+                onChangeText={setReply}
+                multiline
+                numberOfLines={2}
+              />
+              <View style={styles.replyActions}>
+                <Chip
+                  label="Post anonymously"
+                  selected={anonymous}
+                  onPress={() => setAnonymous((v) => !v)}
+                />
+                <Button
+                  label="Reply"
+                  onPress={submitReply}
+                  size="sm"
+                  loading={sending}
+                  disabled={!reply.trim()}
+                  fullWidth={false}
+                />
+              </View>
+            </View>
+          )}
+        </View>
+      )}
+    </Card>
+  );
+});
+
+// ─── Screen ──────────────────────────────────────────────────────────────────
+
+export default function ForumScreen() {
+  const { colors } = useTheme();
+  const toast = useToast();
+  const { user } = useAuth();
 
   const [posts, setPosts] = useState<Post[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [submittingPost, setSubmittingPost] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchPosts();
-  }, []);
+  const [draft, setDraft] = useState("");
+  const [anonymous, setAnonymous] = useState(false);
+  const [posting, setPosting] = useState(false);
+  const [composing, setComposing] = useState(false);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [likedIds, setLikedIds] = useState<Set<string>>(() => new Set());
 
-  const fetchPosts = async () => {
-    setLoading(true);
+  const load = useCallback(async (mode: "initial" | "refresh" = "initial") => {
+    if (mode === "refresh") setRefreshing(true);
+    else setLoading(true);
     setError(null);
 
     try {
       const data = await apiService.getPosts();
-      setPosts(data);
+      setPosts(Array.isArray(data) ? data : []);
     } catch (err: any) {
-      setError(err?.message || "Unable to load community posts.");
+      setError(
+        err?.message?.startsWith("Network")
+          ? "We can't reach the community right now. Check your connection."
+          : (err?.message ?? "We couldn't load the community.")
+      );
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  };
+  }, []);
 
-  const handleAddPost = async () => {
-    if (!postText.trim()) return;
-    if (!user) {
-      Alert.alert("Login required", "Please sign in to post in the community.");
-      return;
-    }
+  useEffect(() => {
+    load();
+  }, [load]);
 
-    setSubmittingPost(true);
+  const handlePost = async () => {
+    if (!draft.trim()) return;
+    setPosting(true);
     try {
-      await apiService.createPost(postText.trim(), anonymous);
-      setPostText("");
+      await apiService.createPost(draft.trim(), anonymous);
+      setDraft("");
       setAnonymous(false);
-      await fetchPosts();
+      setComposing(false);
+      toast.show("Posted to the community");
+      await load("refresh");
     } catch (err: any) {
-      Alert.alert("Post failed", err?.message || "Unable to create post. Please try again.");
+      toast.show(err?.message ?? "Couldn't post. Try again.", { tone: "error" });
     } finally {
-      setSubmittingPost(false);
+      setPosting(false);
     }
   };
 
-  const handleLike = async (id: string) => {
-    try {
-      const response = await apiService.likePost(id);
+  /** Optimistic — the count moves immediately and rolls back if the call fails. */
+  const handleLike = useCallback(
+    async (id: string) => {
+      if (likedIds.has(id)) return;
+      setLikedIds((current) => new Set(current).add(id));
       setPosts((current) =>
-        current.map((post) =>
-          post.id === id ? { ...post, likes: response.likes } : post
-        )
+        current.map((p) => (p.id === id ? { ...p, likes: p.likes + 1 } : p))
       );
-    } catch (err: any) {
-      Alert.alert("Like failed", err?.message || "Unable to like the post.");
-    }
-  };
-
-  const handleAddComment = async (postId: string) => {
-    if (!commentText.trim()) return;
-    if (!user) {
-      Alert.alert("Login required", "Please sign in to add a comment.");
-      return;
-    }
-
-    try {
-      await apiService.addComment(postId, commentText.trim(), commentAnonymous);
-      setCommentText("");
-      setCommentAnonymous(false);
-      await fetchPosts();
-      setActiveCommentsPostId(postId);
-    } catch (err: any) {
-      Alert.alert("Comment failed", err?.message || "Unable to add comment. Please try again.");
-    }
-  };
-
-  const toggleComments = (postId: string) => {
-    setActiveCommentsPostId((current) =>
-      current === postId ? null : postId
-    );
-  };
-
-  const renderComment = (comment: Comment) => (
-    <View style={styles.commentCard} key={comment.id}>
-      <Text style={styles.commentAuthor}>
-        {comment.anonymous ? "Anonymous" : comment.username}
-      </Text>
-      <Text style={styles.commentTextSmall}>{comment.text}</Text>
-    </View>
+      try {
+        const response = await apiService.likePost(id);
+        setPosts((current) =>
+          current.map((p) => (p.id === id ? { ...p, likes: response.likes } : p))
+        );
+      } catch {
+        setLikedIds((current) => {
+          const next = new Set(current);
+          next.delete(id);
+          return next;
+        });
+        setPosts((current) =>
+          current.map((p) => (p.id === id ? { ...p, likes: Math.max(0, p.likes - 1) } : p))
+        );
+        toast.show("Couldn't register that like", { tone: "error" });
+      }
+    },
+    [likedIds, toast]
   );
 
-  const renderPost = ({ item }: { item: Post }) => (
-    <View style={styles.postCard}>
-      <View style={styles.postHeader}>
-        <Text style={styles.username}>
-          {item.anonymous ? "🕶 Anonymous" : `👩 ${item.username}`}
+  const handleComment = useCallback(
+    async (postId: string, text: string, isAnonymous: boolean) => {
+      try {
+        await apiService.addComment(postId, text, isAnonymous);
+        const comments = await apiService.getPostComments(postId);
+        setPosts((current) =>
+          current.map((p) => (p.id === postId ? { ...p, comments } : p))
+        );
+        toast.show("Reply added");
+      } catch (err: any) {
+        toast.show(err?.message ?? "Couldn't add your reply", { tone: "error" });
+      }
+    },
+    [toast]
+  );
+
+  const toggleComments = useCallback(
+    (id: string) => setExpandedId((current) => (current === id ? null : id)),
+    []
+  );
+
+  /** Derived, not invented. Shown only once there is something to count. */
+  const replyCount = useMemo(
+    () => posts.reduce((total, p) => total + p.comments.length, 0),
+    [posts]
+  );
+
+  const header = (
+    <View>
+      <ScreenHeader title="Community" showBack={false} />
+
+      {posts.length > 0 && (
+        <Text variant="callout" color="textSecondary" style={styles.summary}>
+          {posts.length === 1 ? "1 post" : `${posts.length} posts`}
+          {replyCount > 0 && ` · ${replyCount === 1 ? "1 reply" : `${replyCount} replies`}`}
         </Text>
-        <Text style={styles.postMeta}>
-          {item.comments.length} comments · {item.likes} likes
-        </Text>
-      </View>
+      )}
 
-      <Text style={styles.postContent}>{item.content}</Text>
-
-      <View style={styles.postFooter}>
-        <TouchableOpacity
-          style={styles.actionButton}
-          onPress={() => handleLike(item.id)}
-        >
-          <Text style={styles.actionText}>❤️ Like</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.actionButton}
-          onPress={() => toggleComments(item.id)}
-        >
-          <Text style={styles.actionText}>💬 Comment</Text>
-        </TouchableOpacity>
-      </View>
-
-      {activeCommentsPostId === item.id && (
-        <View style={styles.commentSection}>
-          {item.comments.length > 0 ? (
-            item.comments.map(renderComment)
-          ) : (
-            <Text style={styles.emptyComments}>
-              Start the conversation with a helpful reply.
-            </Text>
-          )}
-
-          <TextInput
-            placeholder="Write a reply..."
-            value={commentText}
-            onChangeText={setCommentText}
-            multiline
-            style={styles.commentInput}
+      {user ? (
+        composing ? (
+          <Card style={styles.composer}>
+            <Field
+              label="Your post"
+              placeholder="Ask a question, or share something that helped…"
+              helper={`${draft.length} of ${MAX_POST_LENGTH} characters`}
+              value={draft}
+              onChangeText={(v) => setDraft(v.slice(0, MAX_POST_LENGTH))}
+              multiline
+              numberOfLines={4}
+              autoFocus
+            />
+            <View style={styles.composerActions}>
+              <Chip
+                label="Post anonymously"
+                selected={anonymous}
+                onPress={() => setAnonymous((v) => !v)}
+              />
+              <View style={styles.composerButtons}>
+                <Button
+                  label="Cancel"
+                  onPress={() => {
+                    setComposing(false);
+                    setDraft("");
+                  }}
+                  variant="ghost"
+                  size="sm"
+                  fullWidth={false}
+                />
+                <Button
+                  label="Post"
+                  onPress={handlePost}
+                  size="sm"
+                  loading={posting}
+                  disabled={!draft.trim()}
+                  fullWidth={false}
+                />
+              </View>
+            </View>
+          </Card>
+        ) : (
+          <Button
+            label="Share something"
+            onPress={() => setComposing(true)}
+            icon="create-outline"
+            style={styles.composeCta}
           />
-
-          <View style={styles.commentActionRow}>
-            <TouchableOpacity
-              style={[
-                styles.commentToggle,
-                commentAnonymous && styles.activeCommentToggle,
-              ]}
-              onPress={() => setCommentAnonymous((current) => !current)}
-            >
-              <Text
-                style={[
-                  styles.commentToggleText,
-                  commentAnonymous && styles.activeCommentToggleText,
-                ]}
-              >
-                {commentAnonymous ? "Comment as Anonymous" : "Comment as You"}
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.commentSubmitButton}
-              onPress={() => handleAddComment(item.id)}
-            >
-              <Text style={styles.commentSubmitText}>Post Reply</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+        )
+      ) : (
+        <Card variant="sunken" style={styles.signedOut}>
+          <Text variant="callout" color="textSecondary">
+            Sign in to post and reply. You can read without an account.
+          </Text>
+        </Card>
       )}
     </View>
   );
 
-  const feedHeader = () => (
-    <View>
-      <Text style={styles.header}>Community Feed</Text>
-      <Text style={styles.subHeader}>
-        Browse member posts, add your own, and join PCOS conversations.
-      </Text>
-
-      <View style={styles.statsRow}>
-        <View style={styles.statCard}>
-          <Text style={styles.statNumber}>24</Text>
-          <Text style={styles.statLabel}>Active Posts</Text>
-        </View>
-        <View style={styles.statCard}>
-          <Text style={styles.statNumber}>12</Text>
-          <Text style={styles.statLabel}>New Comments</Text>
-        </View>
-      </View>
-
-      <View style={styles.createPostCard}>
-        <Text style={styles.cardLabel}>Create a new post</Text>
-        <TextInput
-          placeholder="Share your thoughts..."
-          value={postText}
-          onChangeText={setPostText}
-          multiline
-          style={styles.input}
-        />
-
-        <TouchableOpacity
-          style={styles.anonymousButton}
-          onPress={() => setAnonymous((current) => !current)}
-        >
-          <Text style={[
-            styles.anonymousText,
-            anonymous && styles.activeAnonymousText,
-          ]}
-          >
-            {anonymous ? "Posting Anonymously" : "Post Anonymously"}
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.postButton}
-          onPress={handleAddPost}
-        >
-          <Text style={styles.postButtonText}>Create Post</Text>
-        </TouchableOpacity>
-      </View>
-
-      <Text style={styles.sectionTitle}>Latest Discussions</Text>
-    </View>
+  const empty = loading ? (
+    <Card padded={false} style={styles.skeletonCard}>
+      <SkeletonRows count={3} />
+    </Card>
+  ) : error ? (
+    <EmptyState
+      icon="cloud-offline-outline"
+      title="Can't load the community"
+      description={error}
+      actionLabel="Try again"
+      onActionPress={() => load()}
+    />
+  ) : (
+    <EmptyState
+      icon="chatbubbles-outline"
+      title="No posts yet"
+      description="This is a space to ask questions and share what's worked. Someone has to go first."
+      actionLabel={user ? "Write the first post" : undefined}
+      onActionPress={user ? () => setComposing(true) : undefined}
+    />
   );
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView edges={["top"]} style={[styles.safe, { backgroundColor: colors.bg }]}>
       <FlatList
         data={posts}
-        renderItem={renderPost}
         keyExtractor={(item) => item.id}
-        ListHeaderComponent={feedHeader}
-        contentContainerStyle={styles.listContent}
+        renderItem={({ item }) => (
+          <PostCard
+            post={item}
+            liked={likedIds.has(item.id)}
+            expanded={expandedId === item.id}
+            onToggleComments={toggleComments}
+            onLike={handleLike}
+            onComment={handleComment}
+            canPost={Boolean(user)}
+          />
+        )}
+        ListHeaderComponent={header}
+        ListEmptyComponent={empty}
+        contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        // This screen manages its own scrolling, so it does not get the
+        // handling `Screen` provides — and it has two text inputs, the
+        // composer and the per-post reply box. Without these the reply field
+        // sits directly under the keyboard, which is the worst case in the
+        // app: the user cannot see what they are typing.
+        keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
+        automaticallyAdjustKeyboardInsets={Platform.OS === "ios"}
+        contentInsetAdjustmentBehavior="automatic"
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => load("refresh")}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
+          />
+        }
       />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#f4f7fb",
-  },
+  safe: { flex: 1 },
+  list: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxxl },
 
-  listContent: {
-    padding: 16,
-    paddingBottom: 32,
-  },
+  summary: { marginBottom: spacing.lg },
+  composeCta: { marginBottom: spacing.xl },
+  composer: { gap: spacing.lg, marginBottom: spacing.xl },
+  composerActions: { gap: spacing.md },
+  composerButtons: { flexDirection: "row", justifyContent: "flex-end", gap: spacing.sm },
+  signedOut: { marginBottom: spacing.xl },
+  skeletonCard: { paddingHorizontal: spacing.lg },
 
-  header: {
-    fontSize: 28,
-    fontWeight: "700",
-    marginBottom: 8,
-    color: "#111827",
-  },
-
-  subHeader: {
-    color: "#6b7280",
-    marginBottom: 18,
-    fontSize: 15,
-    lineHeight: 22,
-  },
-
-  statsRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 16,
-  },
-
-  statCard: {
-    flex: 1,
-    backgroundColor: "#fff",
-    padding: 16,
-    borderRadius: 14,
-    marginRight: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-
-  statNumber: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: "#1f7a7a",
-    marginBottom: 6,
-  },
-
-  statLabel: {
-    color: "#6b7280",
-    fontSize: 13,
-  },
-
-  createPostCard: {
-    backgroundColor: "#fff",
-    padding: 16,
-    borderRadius: 18,
-    marginBottom: 24,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    elevation: 4,
-  },
-
-  cardLabel: {
-    fontSize: 14,
-    color: "#6b7280",
-    marginBottom: 10,
-    fontWeight: "600",
-  },
-
-  input: {
-    minHeight: 100,
-    borderWidth: 1,
-    borderColor: "#d1d5db",
-    borderRadius: 14,
-    padding: 14,
-    textAlignVertical: "top",
-    marginBottom: 14,
-    backgroundColor: "#f9fafb",
-  },
-
-  anonymousButton: {
-    paddingVertical: 12,
-    borderRadius: 14,
-    backgroundColor: "#eef2f7",
-    marginBottom: 14,
-    alignItems: "center",
-  },
-
-  anonymousText: {
-    color: "#374151",
-    fontWeight: "600",
-  },
-
-  activeAnonymousText: {
-    color: "#1f7a7a",
-  },
-
-  postButton: {
-    backgroundColor: "#1f7a7a",
-    padding: 14,
-    borderRadius: 14,
-    alignItems: "center",
-  },
-
-  postButtonText: {
-    color: "#fff",
-    fontWeight: "700",
-    fontSize: 16,
-  },
-
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#111827",
-    marginBottom: 14,
-  },
-
-  postCard: {
-    backgroundColor: "#fff",
-    padding: 18,
-    borderRadius: 18,
-    marginBottom: 18,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-
-  postHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 10,
-  },
-
-  username: {
-    fontWeight: "700",
-    color: "#111827",
-    fontSize: 15,
-  },
-
-  postMeta: {
-    color: "#6b7280",
-    fontSize: 13,
-  },
-
-  postContent: {
-    fontSize: 15,
-    lineHeight: 22,
-    color: "#374151",
-    marginBottom: 16,
-  },
-
-  postFooter: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: 12,
-  },
-
-  actionButton: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: "#d1d5db",
-    paddingVertical: 12,
-    borderRadius: 14,
-    alignItems: "center",
-    backgroundColor: "#f9fafb",
-  },
-
-  actionText: {
-    color: "#374151",
-    fontWeight: "600",
-  },
-
-  commentSection: {
-    marginTop: 18,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: "#e5e7eb",
-  },
-
-  commentCard: {
-    backgroundColor: "#f9fafb",
-    padding: 12,
-    borderRadius: 14,
-    marginBottom: 10,
-  },
-
-  commentAuthor: {
-    fontWeight: "700",
-    color: "#111827",
-    marginBottom: 4,
-  },
-
-  commentTextSmall: {
-    color: "#4b5563",
-    lineHeight: 20,
-  },
-
-  emptyComments: {
-    color: "#6b7280",
-    marginBottom: 12,
-    fontSize: 14,
-  },
-
-  commentInput: {
-    minHeight: 80,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#d1d5db",
-    padding: 12,
-    backgroundColor: "#fff",
-    marginBottom: 12,
-    textAlignVertical: "top",
-  },
-
-  commentActionRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: 12,
-  },
-
-  commentToggle: {
-    flex: 1,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#d1d5db",
-    paddingVertical: 12,
-    alignItems: "center",
-    backgroundColor: "#f9fafb",
-  },
-
-  activeCommentToggle: {
-    backgroundColor: "#1f7a7a",
-    borderColor: "#1f7a7a",
-  },
-
-  commentToggleText: {
-    color: "#374151",
-    fontWeight: "600",
-  },
-
-  activeCommentToggleText: {
-    color: "#fff",
-  },
-
-  commentSubmitButton: {
-    backgroundColor: "#1f7a7a",
-    borderRadius: 14,
-    paddingVertical: 12,
+  post: { marginBottom: spacing.md, gap: spacing.md },
+  postHead: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  avatar: {
+    width: 30,
+    height: 30,
+    borderRadius: radius.pill,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 16,
+  },
+  author: { flex: 1 },
+  postBody: { marginTop: -spacing.xs },
+  postActions: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    paddingTop: spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
 
-  commentSubmitText: {
-    color: "#fff",
-    fontWeight: "700",
+  comments: { gap: spacing.sm, paddingTop: spacing.md, borderTopWidth: StyleSheet.hairlineWidth },
+  comment: { gap: 2, padding: spacing.md, borderRadius: radius.md },
+  noComments: { paddingVertical: spacing.sm },
+  replyBox: { gap: spacing.md, marginTop: spacing.sm },
+  replyActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: spacing.md,
   },
 });

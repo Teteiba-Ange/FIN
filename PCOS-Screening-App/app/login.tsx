@@ -1,372 +1,245 @@
-import {
-  View,
-  Text,
-  Image,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  ActivityIndicator,
-  Alert,
-  SafeAreaView,
-} from "react-native";
-import React, { useState } from "react";
+// app/login.tsx
+/**
+ * Sign in.
+ *
+ * Rebuilt on the design system. What changed and why:
+ *
+ *   - 32 hardcoded hex values are gone, so the screen now has a dark mode.
+ *     Previously it rendered #f0f4f8 regardless of the device setting while
+ *     the status bar around it went dark.
+ *   - Validation is inline, next to the field it concerns, instead of an
+ *     `Alert` that names the problem after covering the form.
+ *   - The Facebook button is removed: `app.json` still holds the literal
+ *     "YOUR_FACEBOOK_APP_ID" and `socialAuth` throws on that string, so it
+ *     could never have worked. Google is removed for the same class of
+ *     reason — it stores Google's id_token as our bearer token, which our
+ *     own middleware can never verify, so every request after "success"
+ *     returns 401. Both come back when there is a backend to exchange with.
+ *   - "Forgot password" is removed rather than left as a control with no
+ *     handler and no route behind it. A dead control costs more trust than
+ *     an absent one.
+ */
+
+import React, { useRef, useState } from "react";
+import { Image, StyleSheet, View, type TextInput } from "react-native";
 import { useRouter } from "expo-router";
-import { useAuth } from "../context/authContext";
-// @ts-ignore: module may not have type declarations in this project
-import Icon from 'react-native-vector-icons/Feather'; // ← added
+import Animated, { FadeIn, FadeOut, LinearTransition } from "react-native-reanimated";
 
-type LoginProps = {
-  navigation?: any;
-};
+import { Screen, Text, Field, Button, Card } from "@/components/ui";
+import { useAuth } from "@/features/auth";
+import { useKeyboard } from "@/lib/hooks/useKeyboard";
+import { spacing, radius, useTheme } from "@/theme";
 
-const Login = ({ navigation }: LoginProps) => {
+type Errors = { email?: string; password?: string; form?: string };
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+export default function LoginScreen() {
   const router = useRouter();
-  const { login, loading, socialAuth } = useAuth();
+  const { colors } = useTheme();
+  const { login } = useAuth();
+  const keyboard = useKeyboard();
+
+  // So the keyboard's "Next" key moves to the password rather than doing
+  // nothing, which is what `returnKeyType` alone amounts to.
+  const passwordRef = useRef<TextInput>(null);
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [loginLoading, setLoginLoading] = useState(false);
+  const [errors, setErrors] = useState<Errors>({});
+  const [submitting, setSubmitting] = useState(false);
+
+  const clear = (key: keyof Errors) =>
+    setErrors((prev) => ({ ...prev, [key]: undefined, form: undefined }));
+
+  const validate = (): boolean => {
+    const next: Errors = {};
+    if (!email.trim()) next.email = "Enter your email address";
+    else if (!EMAIL_RE.test(email.trim())) next.email = "That doesn't look like an email address";
+    if (!password) next.password = "Enter your password";
+    setErrors(next);
+    return Object.keys(next).length === 0;
+  };
 
   const handleLogin = async () => {
-    if (!email.trim() || !password.trim()) {
-      Alert.alert("Missing Fields", "Please enter both email and password");
-      return;
-    }
+    if (!validate()) return;
 
+    setSubmitting(true);
     try {
-      setLoginLoading(true);
       await login(email.trim().toLowerCase(), password);
-      router.replace("/profile");
+      router.replace("/");
     } catch (error: any) {
-      console.log("Login error:", error);
-      const message =
-        error?.response?.data?.error ||
-        error?.message ||
-        "Invalid email or password. Please try again.";
-      Alert.alert("Login Failed", message);
+      // The server returns a deliberately vague "Invalid credentials" for both
+      // an unknown email and a wrong password — we keep that vagueness here
+      // rather than telling an attacker which of the two they got right.
+      setErrors({
+        form:
+          error?.message === "Invalid credentials"
+            ? "That email and password don't match. Check both and try again."
+            : (error?.message ?? "We couldn't sign you in. Check your connection and try again."),
+      });
     } finally {
-      setLoginLoading(false);
+      setSubmitting(false);
     }
   };
-
-  const handleGoogleLogin = async () => {
-    try {
-      setLoginLoading(true);
-      await socialAuth("google", "login");
-      router.replace("/profile");
-    } catch (error) {
-      Alert.alert("Google Login Failed", "Please try again.");
-    } finally {
-      setLoginLoading(false);
-    }
-  };
-
-  const handleFacebookLogin = async () => {
-    try {
-      setLoginLoading(true);
-      await socialAuth("facebook", "login");
-      router.replace("/profile");
-    } catch (error) {
-      Alert.alert("Facebook Login Failed", "Please try again.");
-    } finally {
-      setLoginLoading(false);
-    }
-  };
-
-  if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#1f7a7a" />
-      </View>
-    );
-  }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <ScrollView
-        contentContainerStyle={styles.container}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-      >
-        {/* App Logo */}
-        <View style={styles.logoContainer}>
-          <Image
-            source={require("../assets/logo.png")}
-            style={styles.logo}
-            resizeMode="contain"
-          />
-        </View>
-
-        <Text style={styles.title}>Welcome Back</Text>
-        <Text style={styles.subtitle}>
-          Your journey to hormonal harmony continues here.
-        </Text>
-
-        {/* Form Card */}
-        <View style={styles.card}>
-          <Text style={styles.label}>Email Address</Text>
-          <View style={styles.inputRow}>
-            <Text style={styles.inputIcon}>✉️</Text>
-            <TextInput
-              placeholder="name@example.com"
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-              style={styles.input}
-              placeholderTextColor="#aaa"
-            />
-          </View>
-
-          <View style={styles.passwordHeader}>
-            <Text style={styles.label}>Password</Text>
-            <TouchableOpacity>
-              <Text style={styles.forgotText}>Forgot Password?</Text>
-            </TouchableOpacity>
-          </View>
-          <View style={styles.inputRow}>
-            <Text style={styles.inputIcon}>🔒</Text>
-            <TextInput
-              placeholder="••••••••"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry={!showPassword}
-              style={[styles.input, { flex: 1 }]}
-              placeholderTextColor="#aaa"
-              autoCorrect={false}
-              autoCapitalize="none"
-            />
-            <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-              <Icon
-                name={showPassword ? "eye-off" : "eye"}
-                size={20}
-                color="#6b7280"
-              />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        <TouchableOpacity
-          style={[styles.button, loginLoading && styles.buttonDisabled]}
-          onPress={handleLogin}
-          disabled={loginLoading}
-          activeOpacity={0.8}
-        >
-          {loginLoading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.buttonText}>Login →</Text>
-          )}
-        </TouchableOpacity>
-
-        <View style={styles.dividerRow}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.dividerText}>OR CONTINUE WITH</Text>
-          <View style={styles.dividerLine} />
-        </View>
-
-        <View style={styles.socialRow}>
-          <TouchableOpacity style={styles.socialButton} onPress={handleGoogleLogin}>
-            <Text style={styles.googleText}>G</Text>
-            <Text style={styles.socialButtonText}>Google</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.socialButton} onPress={handleFacebookLogin}>
-            <Text style={styles.facebookText}>f</Text>
-            <Text style={styles.socialButtonText}>Facebook</Text>
-          </TouchableOpacity>
-        </View>
-
-        <Text style={styles.signupText}>
-          Don't have an account?{" "}
-          <Text
-            style={styles.signupLink}
-            onPress={() => router.push("/signup")}
+    <Screen
+      edges={["top", "bottom"]}
+      // Centred while idle, top-aligned once the keyboard is up — centring
+      // against a shrunken viewport pushes the fields under the keyboard.
+      contentContainerStyle={[styles.content, keyboard.visible && styles.contentTyping]}
+    >
+      <Animated.View layout={LinearTransition.duration(220)} style={styles.brand}>
+        {/*
+          The logo and subtitle are the first things to go when space is tight.
+          They are decoration on a screen the user has already decided to use,
+          and on a small handset they are the difference between the password
+          field being visible and being behind the keyboard.
+        */}
+        {!keyboard.visible && (
+          <Animated.View
+            entering={FadeIn.duration(200)}
+            exiting={FadeOut.duration(120)}
+            style={[styles.mark, { backgroundColor: colors.surface, borderColor: colors.border }]}
           >
-            Sign Up
-          </Text>
-        </Text>
-      </ScrollView>
-    </SafeAreaView>
-  );
-};
+            <Image
+              source={require("../assets/logo.png")}
+              style={styles.logo}
+              resizeMode="contain"
+              // Decorative — the product name is right below it in text.
+              accessibilityElementsHidden
+              importantForAccessibility="no"
+            />
+          </Animated.View>
+        )}
 
-// styles unchanged (except no eye emoji styles needed)
+        <Text variant="title" center accessibilityRole="header" style={styles.title}>
+          Welcome back
+        </Text>
+
+        {!keyboard.visible && (
+          <Animated.View entering={FadeIn.duration(200)} exiting={FadeOut.duration(120)}>
+            <Text variant="body" color="textSecondary" center style={styles.subtitle}>
+              Sign in to pick up your tracking where you left off.
+            </Text>
+          </Animated.View>
+        )}
+      </Animated.View>
+
+      <View style={styles.form}>
+        <Field
+          label="Email address"
+          placeholder="name@example.com"
+          value={email}
+          onChangeText={(v) => {
+            setEmail(v);
+            clear("email");
+          }}
+          error={errors.email}
+          icon="mail-outline"
+          keyboardType="email-address"
+          autoCapitalize="none"
+          autoComplete="email"
+          textContentType="emailAddress"
+          autoCorrect={false}
+          returnKeyType="next"
+          onSubmitEditing={() => passwordRef.current?.focus()}
+          // Keeps the keyboard up between the two fields instead of dropping
+          // and re-raising it, which is what makes a two-field form feel slow.
+          blurOnSubmit={false}
+        />
+
+        <Field
+          ref={passwordRef}
+          label="Password"
+          placeholder="Your password"
+          value={password}
+          onChangeText={(v) => {
+            setPassword(v);
+            clear("password");
+          }}
+          error={errors.password}
+          icon="lock-closed-outline"
+          secure
+          autoCapitalize="none"
+          autoComplete="current-password"
+          textContentType="password"
+          returnKeyType="go"
+          onSubmitEditing={handleLogin}
+        />
+
+        {/*
+          A failure that belongs to the submission rather than to one field.
+          Announced politely so a screen reader picks it up without stealing
+          focus from wherever the user currently is.
+        */}
+        {errors.form && (
+          <Card
+            variant="sunken"
+            style={[styles.formError, { backgroundColor: colors.dangerSubtle }]}
+          >
+            <Text
+              variant="callout"
+              style={{ color: colors.danger }}
+              accessibilityLiveRegion="polite"
+            >
+              {errors.form}
+            </Text>
+          </Card>
+        )}
+
+        <Button
+          label="Sign in"
+          onPress={handleLogin}
+          loading={submitting}
+          size="lg"
+          style={styles.submit}
+        />
+      </View>
+
+      <View style={styles.footer}>
+        <Text variant="callout" color="textSecondary" center>
+          New here?
+        </Text>
+        <Button
+          label="Create an account"
+          onPress={() => router.push("/signup")}
+          variant="ghost"
+          size="sm"
+          fullWidth={false}
+        />
+      </View>
+    </Screen>
+  );
+}
+
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: "#f0f4f8",
-  },
-  container: {
-    flexGrow: 1,
-    backgroundColor: "#f0f4f8",
-    paddingHorizontal: 24,
-    paddingBottom: 40,
-    alignItems: "center",
-  },
-  logoContainer: {
-    marginTop: 60,
-    marginBottom: 20,
+  // The form sits slightly above centre — optically centred rather than
+  // mathematically, which is what reads as balanced once the keyboard is up.
+  content: { justifyContent: "center", paddingBottom: spacing.xxxl },
+  // With the keyboard up the viewport is roughly half as tall; centring in it
+  // puts the fields under the keyboard rather than above it.
+  contentTyping: { justifyContent: "flex-start", paddingTop: spacing.lg },
+  brand: { alignItems: "center", marginBottom: spacing.xxl },
+  mark: {
     width: 72,
     height: 72,
-    borderRadius: 16,
-    backgroundColor: "#fff",
-    justifyContent: "center",
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  logo: {
-    width: 48,
-    height: 48,
-  },
-  title: {
-    fontSize: 26,
-    fontWeight: "700",
-    color: "#1a1a1a",
-    textAlign: "center",
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: "#6b7280",
-    textAlign: "center",
-    lineHeight: 20,
-    marginBottom: 28,
-    paddingHorizontal: 10,
-  },
-  card: {
-    width: "100%",
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    padding: 20,
-    shadowColor: "#000",
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    elevation: 2,
-    marginBottom: 20,
-  },
-  label: {
-    fontSize: 13,
-    color: "#6b7280",
-    marginBottom: 6,
-    marginTop: 8,
-  },
-  passwordHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  forgotText: {
-    fontSize: 13,
-    color: "#1f7a7a",
-    fontWeight: "600",
-  },
-  inputRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    backgroundColor: "#fff",
-  },
-  inputIcon: {
-    fontSize: 16,
-    marginRight: 8,
-  },
-  input: {
-    flex: 1,
-    fontSize: 14,
-    color: "#1a1a1a",
-    paddingVertical: 10,
-  },
-  button: {
-    width: "100%",
-    backgroundColor: "#1f7a7a",
-    paddingVertical: 15,
-    borderRadius: 12,
-    alignItems: "center",
-    marginBottom: 24,
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  buttonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "700",
-    letterSpacing: 0.3,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#f5f7fa",
-  },
-  dividerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    width: "100%",
-    marginBottom: 20,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: "#e5e7eb",
-  },
-  dividerText: {
-    fontSize: 11,
-    color: "#9ca3af",
-    marginHorizontal: 10,
-    letterSpacing: 0.5,
-  },
-  socialRow: {
-    flexDirection: "row",
-    gap: 12,
-    width: "100%",
-    marginBottom: 28,
-  },
-  socialButton: {
-    flex: 1,
-    flexDirection: "row",
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth * 2,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-    borderRadius: 10,
-    paddingVertical: 12,
-    backgroundColor: "#fff",
-    gap: 8,
+    marginBottom: spacing.xl,
   },
-  socialButtonText: {
-    fontSize: 14,
-    fontWeight: "500",
-    color: "#374151",
-  },
-  googleText: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#EA4335",
-  },
-  facebookText: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#1877F2",
-  },
-  signupText: {
-    fontSize: 14,
-    color: "#6b7280",
-  },
-  signupLink: {
-    color: "#1f7a7a",
-    fontWeight: "700",
+  logo: { width: 42, height: 42 },
+  title: { marginBottom: spacing.xs },
+  subtitle: { maxWidth: 300 },
+  form: { gap: spacing.lg },
+  formError: { paddingVertical: spacing.md },
+  submit: { marginTop: spacing.sm },
+  footer: {
+    marginTop: spacing.xxl,
+    alignItems: "center",
+    gap: spacing.xs,
   },
 });
-
-export default Login;

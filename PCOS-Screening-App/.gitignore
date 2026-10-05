@@ -32,7 +32,13 @@ yarn-error.*
 *.pem
 
 # local env files
+# `.env` itself was NOT ignored here, only `.env*.local` — so the moment the
+# file held anything it would have been committed. It now carries the API URL
+# and will carry more. (G-07 in PLAN.md.)
+.env
 .env*.local
+# ...but the template is meant to be committed.
+!.env.example
 
 # typescript
 *.tsbuildinfo

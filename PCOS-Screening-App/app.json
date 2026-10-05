@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "PCOS-Screening-App",
+    "name": "PCOS Screening",
     "slug": "PCOS-Screening-App",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -9,12 +9,13 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.anonymous.PCOSScreeningApp"
     },
     "android": {
       "adaptiveIcon": {
-         "backgroundColor": "#1f7a7a",
-         "foregroundImage": "./assets/logo.png"
+        "backgroundColor": "#1f7a7a",
+        "foregroundImage": "./assets/images/adaptive-icon.png"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
@@ -31,25 +32,40 @@
         "expo-splash-screen",
         {
           "image": "./assets/images/splash-icon.png",
-          "imageWidth": 200,
+          "imageWidth": 180,
           "resizeMode": "contain",
-          "backgroundColor": "#ffffff",
+          "backgroundColor": "#fbfcfc",
           "dark": {
-            "backgroundColor": "#000000"
+            "backgroundColor": "#0b1413"
           }
         }
       ],
       "expo-font",
       "@react-native-community/datetimepicker",
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Lets you choose a profile picture from your photos.",
+          "cameraPermission": "Lets you take a profile picture.",
+          "microphonePermission": false
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/notification-icon.png",
+          "color": "#1f7a7a"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
     },
     "extra": {
-      "googleClientId": "125379670731-j8lpa594k9rib4825e58m75gudv2fu7j.apps.googleusercontent.com",
-      "facebookAppId": "YOUR_FACEBOOK_APP_ID"
+      "googleClientId": "125379670731-j8lpa594k9rib4825e58m75gudv2fu7j.apps.googleusercontent.com"
     }
   }
 }

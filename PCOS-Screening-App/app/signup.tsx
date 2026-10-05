@@ -1,320 +1,298 @@
-import {
-  View,
-  Text,
-  Image,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  Alert,
-  SafeAreaView,
-} from "react-native";
-import React, { useState } from "react";
-import { useRouter } from "expo-router";
-import { useAuth } from "../context/authContext";
-import { Feather as Icon } from "@expo/vector-icons";
+// app/signup.tsx
+/**
+ * Create an account.
+ *
+ * Rebuilt on the design system, matching login exactly — the two screens
+ * previously used different backgrounds (#ffffff vs #f0f4f8), different input
+ * styles, different radii and different social-button colours, so moving
+ * between them felt like moving between two apps.
+ *
+ * Also fixed here:
+ *   - The 220px stock photo is gone. It pushed the first input below the fold
+ *     on a small handset and carried no information.
+ *   - Password rules are stated up front and checked inline, rather than the
+ *     only feedback being an `Alert` saying "Passwords do not match" after
+ *     the user has filled in four fields.
+ *   - Social buttons removed — see the note in login.tsx for why neither
+ *     provider could have worked.
+ *   - "Join PMOS Wellness" corrected: the product is named inconsistently in
+ *     five places across the app. See C-09 in PLAN.md.
+ */
 
-type SignupProps = {
-  navigation?: any;
+import React, { useRef, useState } from "react";
+import { Image, StyleSheet, View, type TextInput } from "react-native";
+import { useRouter } from "expo-router";
+import Animated, { FadeIn, FadeOut, LinearTransition } from "react-native-reanimated";
+
+import { Screen, Text, Field, Button, Card } from "@/components/ui";
+import { useAuth } from "@/features/auth";
+import { useKeyboard } from "@/lib/hooks/useKeyboard";
+import { spacing, radius, useTheme } from "@/theme";
+
+type Errors = {
+  name?: string;
+  email?: string;
+  password?: string;
+  confirm?: string;
+  form?: string;
 };
 
-const Signup = ({ navigation }: SignupProps) => {
-  const { signup, socialAuth } = useAuth();
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const MIN_PASSWORD = 8;
+
+export default function SignupScreen() {
   const router = useRouter();
+  const { colors } = useTheme();
+  const { signup } = useAuth();
+  const keyboard = useKeyboard();
+
+  // Name → email → password → confirm → submit, without the keyboard dropping
+  // between each. Four fields is exactly where tapping each one starts to grate.
+  const emailRef = useRef<TextInput>(null);
+  const passwordRef = useRef<TextInput>(null);
+  const confirmRef = useRef<TextInput>(null);
+
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [confirm, setConfirm] = useState("");
+  const [errors, setErrors] = useState<Errors>({});
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleCreateAccount = async () => {
-    if (!name.trim() || !email.trim() || !password.trim() || !confirmPassword.trim()) {
-      Alert.alert("Missing Fields", "Please fill out all fields.");
-      return;
-    }
+  const clear = (key: keyof Errors) =>
+    setErrors((prev) => ({ ...prev, [key]: undefined, form: undefined }));
 
-    if (password !== confirmPassword) {
-      Alert.alert("Password Mismatch", "Passwords do not match.");
-      return;
-    }
+  const validate = (): boolean => {
+    const next: Errors = {};
 
+    if (!name.trim()) next.name = "Enter your name";
+    else if (name.trim().length < 2) next.name = "That name looks too short";
+
+    if (!email.trim()) next.email = "Enter your email address";
+    else if (!EMAIL_RE.test(email.trim())) next.email = "That doesn't look like an email address";
+
+    if (!password) next.password = "Choose a password";
+    else if (password.length < MIN_PASSWORD)
+      next.password = `Use at least ${MIN_PASSWORD} characters`;
+
+    if (!confirm) next.confirm = "Type your password again";
+    else if (confirm !== password) next.confirm = "These don't match";
+
+    setErrors(next);
+    return Object.keys(next).length === 0;
+  };
+
+  const handleSignup = async () => {
+    if (!validate()) return;
+
+    setSubmitting(true);
     try {
       await signup(email.trim().toLowerCase(), password, name.trim());
-      router.replace("/profile");
+      router.replace("/");
     } catch (error: any) {
-      Alert.alert("Signup Failed", error.message || "Unable to create account.");
-    }
-  };
-
-  const handleGoogleSignup = async () => {
-    try {
-      await socialAuth("google", "signup");
-      router.replace("/profile");
-    } catch (error) {
-      Alert.alert("Google Signup Failed", "Please try again.");
-    }
-  };
-
-  const handleFacebookSignup = async () => {
-    try {
-      await socialAuth("facebook", "signup");
-      router.replace("/profile");
-    } catch (error) {
-      Alert.alert("Facebook Signup Failed", "Please try again.");
+      // The server returns 409 with this exact message for a taken email.
+      // That belongs next to the email field, not in a generic banner.
+      if (error?.message === "Email already registered") {
+        setErrors({ email: "There's already an account with this email. Try signing in." });
+      } else {
+        setErrors({
+          form: error?.message ?? "We couldn't create your account. Check your connection and try again.",
+        });
+      }
+    } finally {
+      setSubmitting(false);
     }
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <ScrollView
-        contentContainerStyle={styles.container}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-      >
-        <Image
-          source={require("../assets/Exercise.png")}
-          style={styles.image}
-          resizeMode="cover"
+    <Screen
+      edges={["top", "bottom"]}
+      // Four fields plus a ~200pt brand block does not fit above the keyboard
+      // on a small handset. Centring against the shrunken viewport would put
+      // "Confirm password" behind it.
+      contentContainerStyle={[styles.content, keyboard.visible && styles.contentTyping]}
+    >
+      <Animated.View layout={LinearTransition.duration(220)} style={styles.brand}>
+        {!keyboard.visible && (
+          <Animated.View
+            entering={FadeIn.duration(200)}
+            exiting={FadeOut.duration(120)}
+            style={[styles.mark, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          >
+            <Image
+              source={require("../assets/logo.png")}
+              style={styles.logo}
+              resizeMode="contain"
+              accessibilityElementsHidden
+              importantForAccessibility="no"
+            />
+          </Animated.View>
+        )}
+
+        <Text variant="title" center accessibilityRole="header" style={styles.title}>
+          Create your account
+        </Text>
+
+        {!keyboard.visible && (
+          <Animated.View entering={FadeIn.duration(200)} exiting={FadeOut.duration(120)}>
+            <Text variant="body" color="textSecondary" center style={styles.subtitle}>
+              Track your symptoms and cycle over time, and see how they change.
+            </Text>
+          </Animated.View>
+        )}
+      </Animated.View>
+
+      <View style={styles.form}>
+        <Field
+          label="Full name"
+          placeholder="Jane Doe"
+          value={name}
+          onChangeText={(v) => {
+            setName(v);
+            clear("name");
+          }}
+          error={errors.name}
+          icon="person-outline"
+          autoCapitalize="words"
+          autoComplete="name"
+          textContentType="name"
+          returnKeyType="next"
+          onSubmitEditing={() => emailRef.current?.focus()}
+          // Keeps the keyboard up between fields instead of dropping and
+          // re-raising it, which is what makes a four-field form feel slow.
+          blurOnSubmit={false}
         />
 
-        <Text style={styles.title}>Join PMOS Wellness</Text>
-        <Text style={styles.subtitle}>
-          Begin your journey to hormonal balance with personalized insights and care
-        </Text>
+        <Field
+          ref={emailRef}
+          label="Email address"
+          placeholder="jane@example.com"
+          value={email}
+          onChangeText={(v) => {
+            setEmail(v);
+            clear("email");
+          }}
+          error={errors.email}
+          icon="mail-outline"
+          keyboardType="email-address"
+          autoCapitalize="none"
+          autoComplete="email"
+          textContentType="emailAddress"
+          autoCorrect={false}
+          returnKeyType="next"
+          onSubmitEditing={() => passwordRef.current?.focus()}
+          blurOnSubmit={false}
+        />
 
-        <View style={styles.form}>
-          <Text style={styles.label}>Full Name</Text>
-          <TextInput
-            placeholder="Jane Doe"
-            value={name}
-            onChangeText={setName}
-            style={styles.input}
-            placeholderTextColor="#94a3b8"
-          />
+        <Field
+          ref={passwordRef}
+          label="Password"
+          placeholder="At least 8 characters"
+          helper={`${MIN_PASSWORD} characters or more.`}
+          value={password}
+          onChangeText={(v) => {
+            setPassword(v);
+            clear("password");
+            if (confirm) clear("confirm");
+          }}
+          error={errors.password}
+          icon="lock-closed-outline"
+          secure
+          autoCapitalize="none"
+          autoComplete="new-password"
+          textContentType="newPassword"
+          returnKeyType="next"
+          onSubmitEditing={() => confirmRef.current?.focus()}
+          blurOnSubmit={false}
+        />
 
-          <Text style={styles.label}>Email Address</Text>
-          <TextInput
-            placeholder="jane@example.com"
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            style={styles.input}
-            placeholderTextColor="#94a3b8"
-          />
+        <Field
+          ref={confirmRef}
+          label="Confirm password"
+          placeholder="Type it again"
+          value={confirm}
+          onChangeText={(v) => {
+            setConfirm(v);
+            clear("confirm");
+          }}
+          error={errors.confirm}
+          icon="lock-closed-outline"
+          secure
+          autoCapitalize="none"
+          autoComplete="new-password"
+          textContentType="newPassword"
+          returnKeyType="go"
+          onSubmitEditing={handleSignup}
+        />
 
-          <Text style={styles.label}>Password</Text>
-          <View style={styles.inputRow}>
-            <TextInput
-              placeholder="••••••••"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry={!showPassword}
-              style={[styles.input, { flex: 1 }]}
-              placeholderTextColor="#94a3b8"
-            />
-            <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
-              <Icon
-                name={showPassword ? "eye-off" : "eye"}
-                size={20}
-                color="#6b7280"
-              />
-            </TouchableOpacity>
-          </View>
-
-          <Text style={styles.label}>Confirm Password</Text>
-          <View style={styles.inputRow}>
-            <TextInput
-              placeholder="••••••••"
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
-              secureTextEntry={!showConfirmPassword}
-              style={[styles.input, { flex: 1 }]}
-              placeholderTextColor="#94a3b8"
-            />
-            <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)}>
-              <Icon
-                name={showConfirmPassword ? "eye-off" : "eye"}
-                size={20}
-                color="#6b7280"
-              />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        <TouchableOpacity style={styles.button} onPress={handleCreateAccount}>
-          <Text style={styles.buttonText}>Create Account →</Text>
-        </TouchableOpacity>
-
-        <View style={styles.dividerRow}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.dividerText}>OR SIGN UP WITH</Text>
-          <View style={styles.dividerLine} />
-        </View>
-
-        <View style={styles.socialRow}>
-          <TouchableOpacity style={styles.socialButton} onPress={handleGoogleSignup}>
-            <Text style={styles.googleText}>G</Text>
-            <Text style={styles.socialButtonText}>Google</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.socialButton} onPress={handleFacebookSignup}>
-            <Text style={styles.facebookText}>f</Text>
-            <Text style={styles.socialButtonText}>Facebook</Text>
-          </TouchableOpacity>
-        </View>
-
-        <Text style={styles.loginText}>
-          Already have an account?{" "}
-          <Text
-            style={styles.loginLink}
-            onPress={() => router.push("/login")}
+        {errors.form && (
+          <Card
+            variant="sunken"
+            style={[styles.formError, { backgroundColor: colors.dangerSubtle }]}
           >
-            Login
-          </Text>
+            <Text
+              variant="callout"
+              style={{ color: colors.danger }}
+              accessibilityLiveRegion="polite"
+            >
+              {errors.form}
+            </Text>
+          </Card>
+        )}
+
+        <Button
+          label="Create account"
+          onPress={handleSignup}
+          loading={submitting}
+          size="lg"
+          style={styles.submit}
+        />
+
+        {/*
+          The app collects menstrual history, symptoms and family medical
+          history. Saying so before the account exists is the minimum; the
+          full consent step lands with onboarding (E-05 / G-06 in PLAN.md).
+        */}
+        <Text variant="caption" color="textTertiary" center style={styles.consent}>
+          Your health data is stored against your account and is only visible to you.
         </Text>
-      </ScrollView>
-    </SafeAreaView>
+      </View>
+
+      <View style={styles.footer}>
+        <Text variant="callout" color="textSecondary" center>
+          Already have an account?
+        </Text>
+        <Button
+          label="Sign in"
+          onPress={() => router.replace("/login")}
+          variant="ghost"
+          size="sm"
+          fullWidth={false}
+        />
+      </View>
+    </Screen>
   );
-};
+}
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: "#ffffff",
-  },
-  container: {
-    padding: 20,
-    paddingBottom: 40,
-    backgroundColor: "#ffffff",
-  },
-  image: {
-    width: "100%",
-    height: 220,
-    borderRadius: 16,
-    marginBottom: 20,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: "800",
-    textAlign: "center",
-    color: "#1e293b",
-    marginBottom: 6,
-  },
-  subtitle: {
-    textAlign: "center",
-    color: "#64748b",
-    fontSize: 14,
-    lineHeight: 20,
-    paddingHorizontal: 10,
-    marginBottom: 20,
-  },
-  form: {
-    marginTop: 5,
-  },
-  label: {
-    color: "#475569",
-    fontSize: 13,
-    fontWeight: "600",
-    marginBottom: 6,
-    marginTop: 12,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-    borderRadius: 12,
-    padding: 14,
-    fontSize: 15,
-    color: "#0f172a",
-    backgroundColor: "#f8fafc",
-  },
-  inputRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-    borderRadius: 12,
-    backgroundColor: "#f8fafc",
-    paddingRight: 12,
-  },
-  button: {
-    marginTop: 30,
-    backgroundColor: "#1f7a7a",
-    padding: 16,
-    borderRadius: 12,
-    alignItems: "center",
-    shadowColor: "#1f7a7a",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
-    elevation: 3,
-  },
-  buttonText: {
-    color: "#ffffff",
-    fontWeight: "700",
-    fontSize: 16,
-  },
-  dividerRow: {
-    flexDirection: "row",
+  content: { justifyContent: "center", paddingTop: spacing.xl, paddingBottom: spacing.xxxl },
+  contentTyping: { justifyContent: "flex-start", paddingTop: spacing.lg },
+  brand: { alignItems: "center", marginBottom: spacing.xxl },
+  mark: {
+    width: 72,
+    height: 72,
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth * 2,
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 24,
-    marginBottom: 16,
-    width: "100%",
+    marginBottom: spacing.xl,
   },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: "#e2e8f0",
-  },
-  dividerText: {
-    marginHorizontal: 12,
-    color: "#64748b",
-    fontSize: 12,
-    fontWeight: "700",
-  },
-  socialRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    width: "100%",
-  },
-  socialButton: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 14,
-    borderRadius: 12,
-    backgroundColor: "#f8fafc",
-    borderWidth: 1,
-    borderColor: "#e2e8f0",
-    marginHorizontal: 4,
-  },
-  socialButtonText: {
-    marginLeft: 8,
-    fontWeight: "700",
-    color: "#334155",
-  },
-  googleText: {
-    color: "#f97316",
-    fontWeight: "800",
-    fontSize: 16,
-  },
-  facebookText: {
-    color: "#2563eb",
-    fontWeight: "800",
-    fontSize: 16,
-  },
-  loginText: {
-    textAlign: "center",
-    marginTop: 20,
-    color: "#64748b",
-    fontSize: 14,
-  },
-  loginLink: {
-    color: "#1f7a7a",
-    fontWeight: "700",
-  },
+  logo: { width: 42, height: 42 },
+  title: { marginBottom: spacing.xs },
+  subtitle: { maxWidth: 320 },
+  form: { gap: spacing.lg },
+  formError: { paddingVertical: spacing.md },
+  submit: { marginTop: spacing.sm },
+  consent: { maxWidth: 320, alignSelf: "center" },
+  footer: { marginTop: spacing.xxl, alignItems: "center", gap: spacing.xs },
 });
-
-export default Signup;

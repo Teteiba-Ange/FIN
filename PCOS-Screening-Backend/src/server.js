@@ -15,6 +15,7 @@ const symptomRoutes = require("./routes/symptoms");
 const reportRoutes = require("./routes/reports");
 const postRoutes = require("./routes/posts");
 const predictionRoutes = require("./routes/predictions");
+const logRoutes = require("./routes/logs");
 
 const app = express();
 
@@ -89,6 +90,7 @@ const registerRoutes = () => {
   app.use("/api/reports", reportRoutes);
   app.use("/api/posts", postRoutes);
   app.use("/api/predictions", predictionRoutes);
+  app.use("/api/logs", logRoutes);
 
   // Health Check
   app.get("/health", (req, res) => {
